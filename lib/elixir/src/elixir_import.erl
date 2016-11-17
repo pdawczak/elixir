@@ -34,9 +34,14 @@ import_functions(Meta, Ref, Opts, E) ->
 
 import_macros(Force, Meta, Ref, Opts, E) ->
   calculate(Meta, Ref, Opts, ?m(E, macros), ?m(E, file), fun() ->
-    case Force of
-      true  -> get_macros(Meta, Ref, E);
-      false -> get_optional_macros(Ref)
+    case fetch_macros(Ref) of
+      {ok, Macros} ->
+        Macros;
+      error when Force ->
+        Tuple = {no_macros, Ref},
+        elixir_errors:form_error(Meta, ?m(E, file), ?MODULE, Tuple);
+      error ->
+        []
     end
   end).
 
@@ -63,7 +68,8 @@ calculate(Meta, Key, Opts, Old, File, Existing) ->
     {only, Only} when is_list(Only) ->
       ok = ensure_keyword_list(Meta, File, Only, only),
       case keyfind(except, Opts) of
-        false -> ok;
+        false ->
+          ok;
         _ ->
           elixir_errors:compile_error(Meta, File,
             ":only and :except can only be given together to import"
@@ -78,9 +84,14 @@ calculate(Meta, Key, Opts, Old, File, Existing) ->
       end;
     _ ->
       case keyfind(except, Opts) of
-        false -> remove_underscored(Existing());
+        false ->
+          remove_underscored(Existing());
         {except, Except} when is_list(Except) ->
           ok = ensure_keyword_list(Meta, File, Except, except),
+          %% We are not checking existence of exports listed in :except option
+          %% on purpose: to support backwards compatible code.
+          %% For example, "import String, except: [trim: 1]"
+          %% should work across all Elixir versions.
           case keyfind(Key, Old) of
             false -> remove_underscored(Existing()) -- Except;
             {Key, OldImports} -> OldImports -- Except
@@ -103,11 +114,7 @@ calculate(Meta, Key, Opts, Old, File, Existing) ->
 %% Retrieve functions and macros from modules
 
 get_exports(Module) ->
-  try
-    Module:'__info__'(functions) ++ Module:'__info__'(macros)
-  catch
-    error:undef -> Module:module_info(exports)
-  end.
+  get_functions(Module) ++ get_macros(Module).
 
 get_functions(Module) ->
   try
@@ -116,24 +123,19 @@ get_functions(Module) ->
     error:undef -> Module:module_info(exports)
   end.
 
-get_macros(Meta, Module, E) ->
-  try
-    Module:'__info__'(macros)
-  catch
-    error:undef ->
-      Tuple = {no_macros, Module},
-      elixir_errors:form_error(Meta, ?m(E, file), ?MODULE, Tuple)
+get_macros(Module) ->
+  case fetch_macros(Module) of
+    {ok, Macros} ->
+      Macros;
+    error ->
+      []
   end.
 
-get_optional_macros(Module)  ->
-  case code:ensure_loaded(Module) of
-    {module, Module} ->
-      try
-        Module:'__info__'(macros)
-      catch
-        error:undef -> []
-      end;
-    {error, _} -> []
+fetch_macros(Module) ->
+  try
+    {ok, Module:'__info__'(macros)}
+  catch
+    error:undef -> error
   end.
 
 %% VALIDATION HELPERS
@@ -151,11 +153,14 @@ ensure_no_special_form_conflict(_Meta, _File, _Key, []) -> ok.
 
 ensure_keyword_list(_Meta, _File, [], _Kind) -> ok;
 
-ensure_keyword_list(Meta, File, [{Key, _} | Rest], Kind) when is_atom(Key) ->
+ensure_keyword_list(Meta, File, [{Key, Value} | Rest], Kind) when is_atom(Key), is_integer(Value) ->
   ensure_keyword_list(Meta, File, Rest, Kind);
 
 ensure_keyword_list(Meta, File, _Other, Kind) ->
-  elixir_errors:compile_error(Meta, File, "invalid :~s option for import, expected a keyword list", [Kind]).
+  Message =
+    "invalid :~s option for import, "
+    "expected a keyword list with integer values",
+  elixir_errors:compile_error(Meta, File, Message, [Kind]).
 
 %% ERROR HANDLING
 

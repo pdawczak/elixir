@@ -736,7 +736,7 @@ defmodule FileTest do
       assert {:error, :enoent} = File.read(Path.expand('fixtures/missing.txt', __DIR__))
     end
 
-    test "read with utf8" do
+    test "read with UTF-8" do
       assert {:ok, "Русский\n日\n"} = File.read(Path.expand('fixtures/utf8.txt', __DIR__))
     end
 
@@ -760,7 +760,7 @@ defmodule FileTest do
       end
     end
 
-    test "write utf8" do
+    test "write UTF-8" do
       fixture = tmp_path("tmp_test.txt")
       try do
         refute File.exists?(fixture)
@@ -795,7 +795,7 @@ defmodule FileTest do
       assert File.close(file) == :ok
     end
 
-    test "open utf8 by default" do
+    test "open UTF-8 by default" do
       {:ok, file} = File.open(fixture_path("utf8.txt"), [:utf8])
       assert IO.gets(file, "") == "Русский\n"
       assert File.close(file) == :ok
@@ -831,7 +831,7 @@ defmodule FileTest do
       end
     end
 
-    test "open utf8 and charlist" do
+    test "open UTF-8 and charlist" do
       {:ok, file} = File.open(fixture_path("utf8.txt"), [:charlist, :utf8])
       assert IO.gets(file, "") == [1056, 1091, 1089, 1089, 1082, 1080, 1081, 10]
       assert File.close(file) == :ok
@@ -1074,6 +1074,25 @@ defmodule FileTest do
       end
     end
 
+    test "rmdir! error messages" do
+      fixture = tmp_path("tmp_test")
+      File.mkdir_p(fixture)
+      File.touch(fixture <> "/file")
+
+      # directory is not empty
+      assert_raise File.Error, "could not remove directory #{inspect fixture}: directory is not empty", fn ->
+        File.rmdir!(fixture)
+      end
+
+      # directory does not exist
+      non_existent_dir = fixture <> "/non_existent_dir"
+      assert_raise File.Error, ~r"\Acould not remove directory #{inspect non_existent_dir}: (not a directory|no such file or directory)", fn ->
+        File.rmdir!(non_existent_dir)
+      end
+
+      File.rm_rf(fixture)
+    end
+
     test "rm_rf" do
       fixture = tmp_path("tmp")
       File.mkdir(fixture)
@@ -1245,7 +1264,7 @@ defmodule FileTest do
   end
 
 
-  test "IO stream utf8" do
+  test "IO stream UTF-8" do
     src  = File.open! fixture_path("file.txt"), [:utf8]
     dest = tmp_path("tmp_test.txt")
 
@@ -1291,7 +1310,7 @@ defmodule FileTest do
     assert stream.line_or_bytes == 10
   end
 
-  test "stream line utf8" do
+  test "stream line UTF-8" do
     src  = fixture_path("file.txt")
     dest = tmp_path("tmp_test.txt")
 
@@ -1308,7 +1327,7 @@ defmodule FileTest do
     end
   end
 
-  test "stream bytes utf8" do
+  test "stream bytes UTF-8" do
     src  = fixture_path("file.txt")
     dest = tmp_path("tmp_test.txt")
 
@@ -1502,7 +1521,7 @@ defmodule FileTest do
   end
 
   if :file.native_name_encoding == :utf8 do
-    test "cwd and cd with utf8" do
+    test "cwd and cd with UTF-8" do
       File.mkdir_p(tmp_path("héllò"))
 
       File.cd!(tmp_path("héllò"), fn ->

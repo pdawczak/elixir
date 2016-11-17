@@ -136,7 +136,7 @@ defmodule Access do
 
   """
 
-  @type t :: list | map | nil
+  @type t :: list | map | nil | any
   @type key :: any
   @type value :: any
 
@@ -181,19 +181,20 @@ defmodule Access do
   @callback get(term :: t, key, default :: value) :: value
 
   @doc """
-  Invoked in order to access the value under `key` and updated it at the same time.
+  Invoked in order to access the value under `key` and update it at the same time.
 
-  The implementation of this callback should invoke the passed function on the
-  value under key `key` in the passed structure; this function should return
-  either `{value_to_return, new_value}` or `:pop`.
+  The implementation of this callback should invoke the passed function with the
+  value under key `key` in the passed structure, or `nil` if the key is not
+  present. This function should return either `{value_to_return, new_value}` or
+  `:pop`.
 
   If it returns `{value_to_return, new_value}`, the return value of this
   callback should be `{value_to_return, new_term}` where `new_term` is `term`
   after updating the value of `key` with `new_value`.
 
   If it returns `:pop`, the return value of this callback should be `{value,
-  new_term}` where `value` is the value under `key` and `new_term` is `term`
-  after removing the key `key`.
+  new_term}` where `value` is the value under `key` or `nil` if not present, and
+  `new_term` is `term` without the key `key`.
 
   See the implementations of `Map.get_and_update/3` or `Keyword.get_and_update/3`
   for more examples.
@@ -203,11 +204,14 @@ defmodule Access do
   @doc """
   Invoked to "pop" the value under `key` out of the given term.
 
-  The implementation should remove `key` from the given `term` and return a
-  `{value, new_term}` tuple where `value` is the value that was under `key` and
-  `new_term` is `term` without `key`.
+  When the key `key` exists in the given `term`, the implementation should
+  return a `{value, new_term}` tuple where `value` is the value that was under
+  `key` and `new_term` is `term` without `key`.
 
-  See the implementations for `Map.pop/2` or `Keyword.pop/2` for more examples.
+  When the key `key` is not present in the given `term`, a tuple `{value, term}`
+  should be returned, where `value` is implementation-defined.
+
+  See the implementations for `Map.pop/3` or `Keyword.pop/3` for more examples.
   """
   @callback pop(term :: t, key) :: {value, t}
 
@@ -227,7 +231,7 @@ defmodule Access do
 
   @doc """
   Fetches the value for the given key in a container (a map, keyword
-  list, or anything that implements the `Access` behaviour).
+  list, or struct that implements the `Access` behaviour).
   """
   @spec fetch(t, term) :: {:ok, term} | :error
   def fetch(container, key)
@@ -239,15 +243,12 @@ defmodule Access do
       raise_undefined_behaviour e, struct, {^struct, :fetch, [^container, ^key], _}
   end
 
-  def fetch(%{} = map, key) do
-    :maps.find(key, map)
+  def fetch(map, key) when is_map(map) do
+    Map.fetch(map, key)
   end
 
   def fetch(list, key) when is_list(list) and is_atom(key) do
-    case :lists.keyfind(key, 1, list) do
-      {^key, value} -> {:ok, value}
-      false -> :error
-    end
+    Keyword.fetch(list, key)
   end
 
   def fetch(list, key) when is_list(list) do
@@ -261,7 +262,7 @@ defmodule Access do
 
   @doc """
   Gets the value for the given key in a container (a map, keyword
-  list, or anything that implements the `Access` behaviour).
+  list, or struct that implements the `Access` behaviour).
   """
   @spec get(t, term, term) :: term
   def get(container, key, default \\ nil) do
@@ -273,19 +274,20 @@ defmodule Access do
 
   @doc """
   Gets and updates the given key in a container (a map, keyword
-  list, or anything that implements the `Access` behaviour).
+  list, or struct that implements the `Access` behaviour).
 
   This `fun` argument receives the value of `key` (or `nil` if `key`
   is not present) and must return a two-element tuple: the "get" value
   (the retrieved value, which can be operated on before being returned)
   and the new value to be stored under `key`. The `fun` may also
   return `:pop`, implying the current value shall be removed
-  from the map and returned.
+  from the container and returned.
 
-  The returned value is a tuple with the "get" value returned by
-  `fun` and a new map with the updated value under `key`.
+  The returned value is a two-element tuple with the "get" value returned by
+  `fun` and a new container with the updated value under `key`.
   """
-  @spec get_and_update(t, key, (value -> {get, value})) :: {get, t} when get: var
+  @spec get_and_update(container :: t, key, (value -> {get_value, update_value} | :pop)) ::
+        {get_value, container :: t} when get_value: var, update_value: value
   def get_and_update(container, key, fun)
 
   def get_and_update(%{__struct__: struct} = container, key, fun) do
@@ -295,7 +297,7 @@ defmodule Access do
       raise_undefined_behaviour e, struct, {^struct, :get_and_update, [^container, ^key, ^fun], _}
   end
 
-  def get_and_update(%{} = map, key, fun) do
+  def get_and_update(map, key, fun) when is_map(map) do
     Map.get_and_update(map, key, fun)
   end
 
@@ -310,7 +312,7 @@ defmodule Access do
 
   @doc """
   Removes the entry with a given key from a container (a map, keyword
-  list, or anything that implements the `Access` behaviour).
+  list, or struct that implements the `Access` behaviour).
 
   Returns a tuple containing the value associated with the key and the
   updated container. `nil` is returned for the value if the key isn't
@@ -340,13 +342,15 @@ defmodule Access do
     e in UndefinedFunctionError ->
       raise_undefined_behaviour e, struct, {^struct, :pop, [^container, ^key], _}
   end
-  def pop(list, key) when is_list(list), do: Keyword.pop(list, key)
+
   def pop(map, key) when is_map(map) do
-    case map do
-      %{^key => value} -> {value, :maps.remove(key, map)}
-      %{} -> {nil, map}
-    end
+    Map.pop(map, key)
   end
+
+  def pop(list, key) when is_list(list) do
+    Keyword.pop(list, key)
+  end
+
   def pop(nil, key) do
     raise ArgumentError,
       "could not pop key #{inspect key} on a nil value"
@@ -355,22 +359,27 @@ defmodule Access do
   ## Accessors
 
   @doc """
-  Accesses the given key in a map/struct.
+  Returns a function that accesses the given key in a map/struct.
 
-  Uses the default value if the key does not exist
-  or if the value being accessed is `nil`.
+  The returned function is typically passed as an accessor to `Kernel.get_in/2`,
+  `Kernel.get_and_update_in/3`, and friends.
+
+  The returned function uses the default value if the key does not exist.
+  This can be used to specify defaults and safely traverse missing keys:
+
+      iex> get_in(%{}, [Access.key(:user, %{}), Access.key(:name)])
+      nil
+
+  Such is also useful when using update functions, allowing us to introduce
+  values as we traverse the data-structure for updates:
+
+      iex> put_in(%{}, [Access.key(:user, %{}), Access.key(:name)], "Mary")
+      %{user: %{name: "Mary"}}
 
   ## Examples
 
-      iex> get_in(%{}, [Access.key(:unknown), Access.key(:name)])
-      nil
-      iex> get_in(%{}, [Access.key(:unknown, %{name: "john"}), Access.key(:name)])
-      "john"
-      iex> get_in(%{}, [Access.key(:unknown), Access.key(:name, "john")])
-      "john"
-
       iex> map = %{user: %{name: "john"}}
-      iex> get_in(map, [Access.key(:unknown), Access.key(:name, "john")])
+      iex> get_in(map, [Access.key(:unknown, %{}), Access.key(:name, "john")])
       "john"
       iex> get_and_update_in(map, [Access.key(:user), Access.key(:name)], fn
       ...>   prev -> {prev, String.upcase(prev)}
@@ -379,18 +388,21 @@ defmodule Access do
       iex> pop_in(map, [Access.key(:user), Access.key(:name)])
       {"john", %{user: %{}}}
 
-  An error is raised if the accessed structure is not a map/struct/nil:
+  An error is raised if the accessed structure is not a map or a struct:
+
+      iex> get_in(nil, [Access.key(:foo)])
+      ** (BadMapError) expected a map, got: nil
 
       iex> get_in([], [Access.key(:foo)])
-      ** (RuntimeError) Access.key/1 expected a map/struct or nil, got: []
+      ** (BadMapError) expected a map, got: []
 
   """
   def key(key, default \\ nil) do
     fn
       :get, data, next ->
-        next.(Map.get(to_map(data), key, default))
+        next.(Map.get(data, key, default))
       :get_and_update, data, next ->
-        value = Map.get(to_map(data), key, default)
+        value = Map.get(data, key, default)
         case next.(value) do
           {get, update} -> {get, Map.put(data, key, update)}
           :pop -> {value, Map.delete(data, key)}
@@ -398,12 +410,11 @@ defmodule Access do
     end
   end
 
-  defp to_map(nil), do: %{}
-  defp to_map(%{} = map), do: map
-  defp to_map(data), do: raise "Access.key/1 expected a map/struct or nil, got: #{inspect data}"
-
   @doc """
-  Accesses the given key in a map/struct.
+  Returns a function that accesses the given key in a map/struct.
+
+  The returned function is typically passed as an accessor to `Kernel.get_in/2`,
+  `Kernel.get_and_update_in/3`, and friends.
 
   Raises if the key does not exist.
 
@@ -443,7 +454,10 @@ defmodule Access do
   end
 
   @doc ~S"""
-  Accesses the element at the given index in a tuple.
+  Returns a function that accesses the element at the given index in a tuple.
+
+  The returned function is typically passed as an accessor to `Kernel.get_in/2`,
+  `Kernel.get_and_update_in/3`, and friends.
 
   Raises if the index is out of bounds.
 
@@ -483,7 +497,10 @@ defmodule Access do
   end
 
   @doc ~S"""
-  Accesses all the elements in a list.
+  Returns a function that accesses all the elements in a list.
+
+  The returned function is typically passed as an accessor to `Kernel.get_in/2`,
+  `Kernel.get_and_update_in/3`, and friends.
 
   ## Examples
 
@@ -540,7 +557,10 @@ defmodule Access do
   end
 
   @doc ~S"""
-  Accesses the element at `index` (zero based) of a list.
+  Returns a function that accesses the element at `index` (zero based) of a list.
+
+  The returned function is typically passed as an accessor to `Kernel.get_in/2`,
+  `Kernel.get_and_update_in/3`, and friends.
 
   ## Examples
 

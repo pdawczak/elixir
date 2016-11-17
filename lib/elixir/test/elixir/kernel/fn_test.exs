@@ -19,15 +19,17 @@ defmodule Kernel.FnTest do
   end
 
   test "case function hoisting does not affect anonymous fns" do
-    assert :undefined =
-             (if is_a?(:atom, 0) do
-                user = :defined
-              else
-                (fn() ->
-                  user = :undefined
-                  user
-                end).()
-              end)
+    result =
+      if atom?(0) do
+        user = :defined
+        user
+      else
+        (fn() ->
+           user = :undefined
+           user
+         end).()
+      end
+    assert result == :undefined
   end
 
   test "capture with access" do
@@ -51,9 +53,9 @@ defmodule Kernel.FnTest do
   end
 
   test "capture local with question mark" do
-    assert (&is_a?/2).(:atom, :a)
-    assert (&(is_a?/2)).(:atom, :a)
-    assert (&is_a?(&1, &2)).(:atom, :a)
+    assert (&atom?/1).(:a)
+    assert (&(atom?/1)).(:a)
+    assert (&atom?(&1)).(:a)
   end
 
   test "capture imported" do
@@ -175,8 +177,8 @@ defmodule Kernel.FnTest do
       "&(&())"
   end
 
-  defp is_a?(:atom, atom) when is_atom(atom), do: true
-  defp is_a?(_, _), do: false
+  defp atom?(atom) when is_atom(atom), do: true
+  defp atom?(_), do: false
 
   defp atl(arg) do
     :erlang.atom_to_list(arg)

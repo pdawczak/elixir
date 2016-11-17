@@ -7,13 +7,11 @@ defmodule Kernel.SpecialForms do
   `alias/2`, `case/2`, etc). The macros `{}` and `<<>>` are also special
   forms used to define tuple and binary data structures respectively.
 
-  This module also documents Elixir's pseudo variables (`__ENV__`,
-  `__MODULE__`, `__DIR__` and `__CALLER__`). Pseudo variables return
-  information about Elixir's compilation environment and can only
-  be read, never assigned to.
+  This module also documents macros that return information about Elixir's
+  compilation environment, such as (`__ENV__/0`, `__MODULE__/0`, `__DIR__/0` and `__CALLER__/0`).
 
-  Finally, it also documents two special forms, `__block__` and
-  `__aliases__`, which are not intended to be called directly by the
+  Finally, it also documents two special forms, `__block__/1` and
+  `__aliases__/1`, which are not intended to be called directly by the
   developer but they appear in quoted contents since they are essential
   in Elixir's constructs.
   """
@@ -133,10 +131,10 @@ defmodule Kernel.SpecialForms do
 
   - `integer`
   - `float`
-  - `bits` (alias for bitstring)
+  - `bits` (alias for `bitstring`)
   - `bitstring`
   - `binary`
-  - `bytes` (alias for binary)
+  - `bytes` (alias for `binary`)
   - `utf8`
   - `utf16`
   - `utf32`
@@ -158,13 +156,13 @@ defmodule Kernel.SpecialForms do
       iex> <<102, rest>>
       ** (ArgumentError) argument error
 
-  We can solve this by explicitly tagging it as a binary:
+  We can solve this by explicitly tagging it as `binary`:
 
       iex> rest = "oo"
       iex> <<102, rest::binary>>
       "foo"
 
-  The utf8, utf16, and utf32 types are for Unicode codepoints. They
+  The `utf8`, `utf16`, and `utf32` types are for Unicode codepoints. They
   can also be applied to literal strings and charlists:
 
       iex> <<"foo"::utf16>>
@@ -357,7 +355,7 @@ defmodule Kernel.SpecialForms do
       iex> Kernel.'+'(1, 2)
       3
 
-  Note that `Kernel."HELLO"` will be treated as a remote call and not an alias.
+  Note that `Kernel."FUNCTION_NAME"` will be treated as a remote call and not an alias.
   This choice was done so every time single- or double-quotes are used, we have
   a remote call regardless of the quote contents. This decision is also reflected
   in the quoted expressions discussed below.
@@ -399,7 +397,7 @@ defmodule Kernel.SpecialForms do
       ...> end
       {:__aliases__, [alias: false], [:Hello, :World]}
 
-  We go into more details about aliases in the `__aliases__` special form
+  We go into more details about aliases in the `__aliases__/1` special form
   documentation.
 
   ## Unquoting
@@ -412,7 +410,7 @@ defmodule Kernel.SpecialForms do
       ...> end
       {{:., [], [{:__aliases__, [alias: false], [:String]}, :downcase]}, [], ["FOO"]}
 
-  Similar to `Kernel."HELLO"`, `unquote(x)` will always generate a remote call,
+  Similar to `Kernel."FUNCTION_NAME"`, `unquote(x)` will always generate a remote call,
   independent of the value of `x`. To generate an alias via the quoted expression,
   one needs to rely on `Module.concat/2`:
 
@@ -455,6 +453,16 @@ defmodule Kernel.SpecialForms do
   Is the same as:
 
       alias Foo.Bar.Baz, as: Baz
+
+  We can also alias multiple modules in one line:
+
+      alias Foo.{Bar, Baz, Biz}
+
+  Is the same as:
+
+      alias Foo.Bar
+      alias Foo.Baz
+      alias Foo.Biz
 
   ## Lexical scope
 
@@ -614,7 +622,7 @@ defmodule Kernel.SpecialForms do
   @doc """
   Returns the current module name as an atom or `nil` otherwise.
 
-  Although the module can be accessed in the `__ENV__`, this macro
+  Although the module can be accessed in the `__ENV__/0`, this macro
   is a convenient shortcut.
   """
   defmacro __MODULE__, do: error!([])
@@ -1029,8 +1037,8 @@ defmodule Kernel.SpecialForms do
 
       Hygiene.return_length #=> 3
 
-  Notice how `return_length` returns 3 even though the `length/1`
-  function is not imported. In fact, even if `return_length`
+  Notice how `Hygiene.return_length/0` returns `3` even though the `Kernel.length/1`
+  function is not imported. In fact, even if `return_length/0`
   imported a function with the same name and arity from another
   module, it wouldn't affect the function result:
 
@@ -1039,10 +1047,10 @@ defmodule Kernel.SpecialForms do
         get_length
       end
 
-  Calling this new `return_length` will still return 3 as result.
+  Calling this new `return_length/0` will still return `3` as result.
 
   Elixir is smart enough to delay the resolution to the latest
-  moment possible. So, if you call `length([1, 2, 3])` inside quote,
+  possible moment. So, if you call `length([1, 2, 3])` inside quote,
   but no `length/1` function is available, it is then expanded in
   the caller:
 

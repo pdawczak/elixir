@@ -17,7 +17,7 @@ defmodule Mix.Tasks.Escript.Install do
 
       mix escript.install escript
       mix escript.install path/to/escript
-      mix escript.install https://example.com/myescript
+      mix escript.install https://example.com/my_escript
       mix escript.install git https://path/to/git/repo
       mix escript.install git https://path/to/git/repo branch git_branch
       mix escript.install git https://path/to/git/repo tag git_tag
@@ -45,10 +45,10 @@ defmodule Mix.Tasks.Escript.Install do
     * `--force` - forces installation without a shell prompt; primarily
       intended for automation in build systems like make
 
-    * `--submodules` - fetch repository submodules before building escript from
+    * `--submodules` - fetches repository submodules before building escript from
       git or github
 
-    * `--app` - specify a custom app name to be used for building the escript
+    * `--app` - specifies a custom app name to be used for building the escript
       from git, github, or hex
   """
 

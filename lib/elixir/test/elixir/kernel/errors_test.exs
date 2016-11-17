@@ -356,6 +356,10 @@ defmodule Kernel.ErrorsTest do
     assert_compile_fail CompileError,
       "nofile:1: unknown key :age for struct Kernel.ErrorsTest.GoodStruct",
       '%#{GoodStruct}{age: 27} = %{}'
+
+    assert_compile_fail CompileError,
+      "nofile:1: unknown key ^field for struct Kernel.ErrorsTest.GoodStruct",
+      '%#{GoodStruct}{^field => 27} = %{}'
   end
 
   test "name for defmodule" do
@@ -539,12 +543,14 @@ defmodule Kernel.ErrorsTest do
 
   test "import with invalid options" do
     assert_compile_fail CompileError,
-      "nofile:1: invalid :only option for import, expected a keyword list",
-      'import Kernel, only: [:invalid]'
+      "nofile:1: invalid :only option for import, " <>
+      "expected a keyword list with integer values",
+      'import Kernel, only: [invalid: nil]'
 
     assert_compile_fail CompileError,
-      "nofile:1: invalid :except option for import, expected a keyword list",
-      'import Kernel, except: [:invalid]'
+      "nofile:1: invalid :except option for import, " <>
+      "expected a keyword list with integer values",
+      'import Kernel, except: [invalid: nil]'
   end
 
   test "import with conflicting options" do
@@ -665,8 +671,6 @@ defmodule Kernel.ErrorsTest do
       "a binary, a boolean, or nil), got: \"Other\""
     assert_raise ArgumentError, message, fn ->
       defmodule DocAttributesFormat do
-        @moduledoc "ModuleTest"
-        {668, "ModuleTest"} = Module.get_attribute(__MODULE__, :moduledoc)
         Module.put_attribute(__MODULE__, :moduledoc, "Other")
       end
     end

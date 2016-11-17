@@ -5,8 +5,8 @@ defprotocol List.Chars do
   The only function required to be implemented is
   `to_charlist` which does the conversion.
 
-  The `to_charlist` function automatically imported
-  by Kernel invokes this protocol.
+  The `to_charlist/1` function automatically imported
+  by `Kernel` invokes this protocol.
   """
 
   def to_charlist(term)

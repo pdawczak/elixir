@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Compile.App do
 
   In order to generate the `.app` file, Mix expects your application
   to have both `:app` and `:version` keys. Furthermore, you can
-  configure the generated application by defining an `application`
+  configure the generated application by defining an `application/0`
   function in your `mix.exs` with the following options:
 
     * `:applications` - all applications your application depends
@@ -31,7 +31,7 @@ defmodule Mix.Tasks.Compile.App do
       to this list. It is most useful in detecting conflicts
       between applications that register the same names.
 
-    * `:mod` - specify a module to invoke when the application
+    * `:mod` - specifies a module to invoke when the application
       is started. It must be in the format `{Mod, args}` where
       args is often an empty list. The module specified must
       implement the callbacks defined by the `Application`
@@ -41,7 +41,7 @@ defmodule Mix.Tasks.Compile.App do
       The application environment is one of the most common ways
       to configure applications.
 
-  Let's see an example `application` function:
+  Let's see an example `application/0` function:
 
       def application do
         [mod: {MyApp, []},

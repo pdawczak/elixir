@@ -32,7 +32,7 @@ defmodule Mix.Tasks.NewTest do
       assert_file "hello_world/mix.exs", fn(file) ->
         assert file =~ "app: :hello_world"
         assert file =~ "version: \"0.1.0\""
-        assert file =~ "mod: {HelloWorld, []}"
+        assert file =~ "mod: {HelloWorld.Application, []}"
       end
 
       assert_file "hello_world/README.md", ~r/# HelloWorld\n/
@@ -40,6 +40,11 @@ defmodule Mix.Tasks.NewTest do
 
       assert_file "hello_world/lib/hello_world.ex", fn(file) ->
         assert file =~ "defmodule HelloWorld do"
+        assert file =~ "def hello do"
+      end
+
+      assert_file "hello_world/lib/hello_world/application.ex", fn(file) ->
+        assert file =~ "defmodule HelloWorld.Application do"
         assert file =~ "use Application"
         assert file =~ "Supervisor.start_link(children, opts)"
       end
@@ -149,6 +154,16 @@ defmodule Mix.Tasks.NewTest do
     in_tmp "new without a specified path", fn ->
       assert_raise Mix.Error, "Expected PATH to be given, please use \"mix new PATH\"", fn ->
         Mix.Tasks.New.run []
+      end
+    end
+  end
+
+  test "new with existent directory" do
+    in_tmp "new_with_existent_directory", fn ->
+      File.mkdir_p!("my_app")
+      send self(), {:mix_shell_input, :yes?, false}
+      assert_raise Mix.Error, "Please select another directory for installation", fn ->
+        Mix.Tasks.New.run ["my_app"]
       end
     end
   end

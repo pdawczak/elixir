@@ -231,7 +231,7 @@ defmodule Macro do
 
   In order to build a variable, a context is expected.
   Most of the times, in order to preserve hygiene, the
-  context must be `__MODULE__`:
+  context must be `__MODULE__/0`:
 
       iex> Macro.var(:foo, __MODULE__)
       {:foo, [], __MODULE__}
@@ -400,7 +400,7 @@ defmodule Macro do
   @doc """
   Validates the given expressions are valid quoted expressions.
 
-  Checks the `type:Macro.t` for the specification of a valid
+  Checks the `t:Macro.t/0` for the specification of a valid
   quoted expression.
 
   It returns `:ok` if the expression is valid. Otherwise it returns a tuple in the form of
@@ -503,8 +503,8 @@ defmodule Macro do
       def unescape_map(?u), do: true
       def unescape_map(e),  do: e
 
-  If the `unescape_map` function returns `false`. The char is
-  not escaped and `\` is kept in the charlist.
+  If the `unescape_map/1` function returns `false`. The char is
+  not escaped and the backslash is kept in the string.
 
   Hexadecimals and Unicode codepoints will be escaped if the map
   function returns `true` for `?x`. Unicode codepoints if the map
@@ -512,7 +512,7 @@ defmodule Macro do
 
   ## Examples
 
-  Using the `unescape_map` function defined above is easy:
+  Using the `unescape_map/1` function defined above is easy:
 
       Macro.unescape_string "example\\n", &unescape_map(&1)
 
@@ -740,8 +740,8 @@ defmodule Macro do
       list == [] ->
         "[]"
       :io_lib.printable_list(list) ->
-        "'" <> Inspect.BitString.escape(IO.chardata_to_string(list), ?') <> "'"
-      Keyword.keyword?(list) ->
+        IO.iodata_to_binary [?', Inspect.BitString.escape(IO.chardata_to_string(list), ?'), ?']
+      Inspect.List.keyword?(list) ->
         "[" <> kw_list_to_string(list, fun) <> "]"
       true ->
         "[" <> Enum.map_join(list, ", ", &to_string(&1, fun)) <> "]"
@@ -763,11 +763,11 @@ defmodule Macro do
     to_string(ast, fun)
   end
 
-  defp bitmods_to_string({:-, _, [left, right]} = ast, fun, _, _) do
+  defp bitmods_to_string({op, _, [left, right]} = ast, fun, _, _) when op in [:*, :-] do
     result =
-      bitmods_to_string(left, fun, :-, :left) <>
-      "-" <>
-      bitmods_to_string(right, fun, :-, :right)
+      bitmods_to_string(left, fun, op, :left) <>
+      Atom.to_string(op) <>
+      bitmods_to_string(right, fun, op, :right)
     fun.(ast, result)
   end
 
@@ -854,7 +854,7 @@ defmodule Macro do
   defp args_to_string(args, fun) do
     {list, last} = :elixir_utils.split_last(args)
 
-    if last != [] and Keyword.keyword?(last) do
+    if last != [] and Inspect.List.keyword?(last) do
       prefix =
         case list do
           [] -> ""
@@ -899,7 +899,7 @@ defmodule Macro do
 
   defp map_to_string(list, fun) do
     cond do
-      Keyword.keyword?(list) -> kw_list_to_string(list, fun)
+      Inspect.List.keyword?(list) -> kw_list_to_string(list, fun)
       true -> map_list_to_string(list, fun)
     end
   end
@@ -972,7 +972,7 @@ defmodule Macro do
 
     * Macros (local or remote)
     * Aliases are expanded (if possible) and return atoms
-    * Pseudo-variables (`__ENV__`, `__MODULE__` and `__DIR__`)
+    * Compilation environment macros (`__ENV__/0`, `__MODULE__/0` and `__DIR__/0`)
     * Module attributes reader (`@foo`)
 
   If the expression cannot be expanded, it returns the expression
@@ -1064,7 +1064,7 @@ defmodule Macro do
     end
   end
 
-  # Expand pseudo-variables
+  # Expand compilation environment macros
   defp do_expand_once({:__MODULE__, _, atom}, env) when is_atom(atom),
     do: {env.module, true}
   defp do_expand_once({:__DIR__, _, atom}, env) when is_atom(atom),

@@ -53,7 +53,7 @@ defmodule System do
   the time, all calculations are done in the `:native` unit, to
   avoid loss of precision, with `convert_time_unit/3` being
   invoked at the end to convert to a specific time unit like
-  milliseconds or microseconds. See the `t:time_unit/0` type for
+  `:millisecond` or `:microsecond`. See the `t:time_unit/0` type for
   more information.
 
   For a more complete rundown on the VM support for different
@@ -65,25 +65,30 @@ defmodule System do
   @typedoc """
   The time unit to be passed to functions like `monotonic_time/1` and others.
 
-  The `:seconds`, `:milliseconds`, `:microseconds` and `:nanoseconds` time
+  The `:second`, `:millisecond`, `:microsecond` and `:nanosecond` time
   units controls the return value of the functions that accept a time unit.
 
   A time unit can also be a strictly positive integer. In this case, it
   represents the "parts per second": the time will be returned in `1 /
-  parts_per_second` seconds. For example, using the `:milliseconds` time unit
+  parts_per_second` seconds. For example, using the `:millisecond` time unit
   is equivalent to using `1000` as the time unit (as the time will be returned
   in 1/1000 seconds - milliseconds).
 
-  Keep in mind the Erlang API will use `:milli_seconds`, `:micro_seconds`
-  and `:nano_seconds` as time units although Elixir normalizes their spelling
-  to match the SI convention.
+  Keep in mind the Erlang API prior to version 19.1 will use `:milli_seconds`,
+  `:micro_seconds` and `:nano_seconds` as time units although Elixir normalizes
+  their spelling to match the SI convention.
   """
   @type time_unit ::
-    :seconds
+    :second
+    | :millisecond
+    | :microsecond
+    | :nanosecond
+    | pos_integer
+    # TODO: Deprecate these in Elixir 2.0
+    | :seconds
     | :milliseconds
     | :microseconds
     | :nanoseconds
-    | pos_integer
 
   @base_dir     :filename.join(__DIR__, "../../..")
   @version_file :filename.join(@base_dir, "VERSION")
@@ -483,6 +488,13 @@ defmodule System do
   This function returns a tuple containing the collected result
   and the command exit status.
 
+  Internally, this function uses a `Port` for interacting with the
+  outside world. However, if you plan to run a long-running program,
+  ports guarantee stdin/stdout devices will be closed but it does not
+  automatically terminate the problem. The documentation for the
+  `Port` module describes this problem and possible solutions under
+  the "Zombie processes" section.
+
   ## Examples
 
       iex> System.cmd "echo", ["hello"]
@@ -500,7 +512,7 @@ defmodule System do
     * `:into` - injects the result into the given collectable, defaults to `""`
     * `:cd` - the directory to run the command in
     * `:env` - an enumerable of tuples containing environment key-value as binary
-    * `:arg0` - set the command arg0
+    * `:arg0` - sets the command arg0
     * `:stderr_to_stdout` - redirects stderr to stdout when `true`
     * `:parallelism` - when `true`, the VM will schedule port tasks to improve
       parallelism in the system. If set to `false`, the VM will try to perform
@@ -669,12 +681,12 @@ defmodule System do
   The result is rounded via the floor function.
 
   `convert_time_unit/3` accepts an additional time unit (other than the
-  ones in the `time_unit` type) called `:native`. `:native` is the time
+  ones in the `t:time_unit/0` type) called `:native`. `:native` is the time
   unit used by the Erlang runtime system. It's determined when the runtime
   starts and stays the same until the runtime is stopped. To determine what
   the `:native` unit amounts to in a system, you can call this function to
   convert 1 second to the `:native` time unit (i.e.,
-  `System.convert_time_unit(1, :seconds, :native)`).
+  `System.convert_time_unit(1, :second, :native)`).
   """
   @spec convert_time_unit(integer, time_unit | :native, time_unit | :native) :: integer
   def convert_time_unit(time, from_unit, to_unit) do
@@ -790,6 +802,18 @@ defmodule System do
 
   defp normalize_time_unit(:native),
     do: :native
+
+  # TODO: Remove these mappings once Elixir requires Erlang/OTP 19.1
+  defp normalize_time_unit(:second),
+    do: :seconds
+  defp normalize_time_unit(:millisecond),
+    do: :milli_seconds
+  defp normalize_time_unit(:microsecond),
+    do: :micro_seconds
+  defp normalize_time_unit(:nanosecond),
+    do: :nano_seconds
+
+  # TODO: Warn on Elixir 1.5
   defp normalize_time_unit(:seconds),
     do: :seconds
   defp normalize_time_unit(:milliseconds),
@@ -798,6 +822,7 @@ defmodule System do
     do: :micro_seconds
   defp normalize_time_unit(:nanoseconds),
     do: :nano_seconds
+
   defp normalize_time_unit(unit) when is_integer(unit) and unit > 0,
     do: unit
 
@@ -809,8 +834,8 @@ defmodule System do
 
   defp normalize_time_unit(other) do
     raise ArgumentError,
-      "unsupported time unit. Expected :seconds, :milliseconds, " <>
-      ":microseconds, :nanoseconds, or a positive integer, " <>
+      "unsupported time unit. Expected :second, :millisecond, " <>
+      ":microsecond, :nanosecond, or a positive integer, " <>
       "got #{inspect other}"
   end
 end

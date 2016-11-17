@@ -8,225 +8,191 @@ defmodule Module do
   After a module is compiled, using many of the functions in
   this module will raise errors, since it is out of their scope
   to inspect runtime data. Most of the runtime data can be inspected
-  via the `__info__(attr)` function attached to each compiled module.
+  via the `__info__/1` function attached to each compiled module.
 
   ## Module attributes
 
   Each module can be decorated with one or more attributes. The following ones
   are currently defined by Elixir:
 
-    * `@after_compile`
+  ### @after_compile
 
-      A hook that will be invoked right after the current module is compiled.
-      Accepts a module or a tuple `{<module>, <function atom>}`.
-      See the "Compile callbacks" section below.
+  A hook that will be invoked right after the current module is compiled.
+  Accepts a module or a tuple `{<module>, <function atom>}`.
+  See the "Compile callbacks" section below.
 
-    * `@before_compile`
+  ### @before_compile
 
-      A hook that will be invoked before the module is compiled.
-      Accepts a module or a tuple `{<module>, <function/macro atom>}`.
-      See the "Compile callbacks" section below.
+  A hook that will be invoked before the module is compiled.
+  Accepts a module or a tuple `{<module>, <function/macro atom>}`.
+  See the "Compile callbacks" section below.
 
-    * `@behaviour` (notice the British spelling)
+  ### @behaviour (notice the British spelling)
 
-      Behaviours can be referenced by modules to ensure they implement
-      required specific function signatures defined by `@callback`.
+  Behaviours can be referenced by modules to ensure they implement
+  required specific function signatures defined by `@callback`.
 
-      For example, you can specify the URI.Parser behaviour as follows:
+  For example, you can specify the `URI.Parser` behaviour as follows:
 
-          defmodule URI.Parser do
-            @doc "Parses the given URL"
-            @callback parse(uri_info :: URI.t) :: URI.t
+      defmodule URI.Parser do
+        @doc "Defines a default port"
+        @callback default_port() :: integer
 
-            @doc "Defines a default port"
-            @callback default_port() :: integer
+        @doc "Parses the given URL"
+        @callback parse(uri_info :: URI.t) :: URI.t
+      end
+
+  And then a module may use it as:
+
+      defmodule URI.HTTP do
+        @behaviour URI.Parser
+        def default_port(), do: 80
+        def parse(info), do: info
+      end
+
+  If the behaviour changes or `URI.HTTP` does not implement
+  one of the callbacks, a warning will be raised.
+
+  ### @compile
+
+  Defines options for module compilation. This is used to configure
+  both Elixir and Erlang compilers, as any other compilation pass
+  added by external tools. For example:
+
+      defmodule M do
+        @compile {:inline, my_fun: 1}
+
+        def my_fun(arg) do
+          to_string(arg)
+        end
+      end
+
+  Multiple uses of `@compile` will accumulate instead of overriding
+  previous ones. See the "Compile options" section below.
+
+  ### @doc
+
+  Provides documentation for the function or macro that follows the
+  attribute.
+
+  Accepts a string (often a heredoc) or `false` where `@doc false` will
+  make the function/macro invisible to the documentation extraction tools
+  like ExDoc. For example:
+
+      defmodule M do
+        @doc "Hello world"
+        def hello do
+          "world"
+        end
+
+        @doc """
+        Sums `a` to `b`.
+        """
+        def sum(a, b) do
+          a + b
+        end
+      end
+
+  ### @dialyzer
+
+  Defines warnings to request or suppress when using a version of
+  `:dialyzer` that supports module attributes.
+
+  Accepts an atom, a tuple, or a list of atoms and tuples. For example:
+
+      defmodule M do
+        @dialyzer {:nowarn_function, my_fun: 1}
+
+        def my_fun(arg) do
+          M.not_a_function(arg)
+        end
+      end
+
+  For the list of supported warnings, see
+  [`:dialyzer` module](http://www.erlang.org/doc/man/dialyzer.html).
+
+  Multiple uses of `@dialyzer` will accumulate instead of overriding
+  previous ones.
+
+  ### @external_resource
+
+  Specifies an external resource to the current module.
+
+  Many times a module embeds information from an external file. This
+  attribute allows the module to annotate which external resources
+  have been used.
+
+  Tools like Mix may use this information to ensure the module is
+  recompiled in case any of the external resources change.
+
+  ### @file
+
+  Changes the filename used in stacktraces for the function or macro that
+  follows the attribute, such as:
+
+      defmodule M do
+        @doc "Hello world"
+        @file "hello.ex"
+        def hello do
+          "world"
+        end
+      end
+
+  ### @moduledoc
+
+  Provides documentation for the current module, such as:
+
+      defmodule M do
+        @moduledoc """
+        A very useful module
+        """
+      end
+
+  Accepts a string (which is often a heredoc) or `false` where
+  `@moduledoc false` will make the module invisible to the
+  documentation extraction tools like ExDoc.
+
+  ### @on_definition
+
+  A hook that will be invoked when each function or macro in the current
+  module is defined. Useful when annotating functions.
+
+  Accepts a module or a tuple `{<module>, <function atom>}`. See the
+  "Compile callbacks" section below.
+
+  ### @on_load
+
+  A hook that will be invoked whenever the module is loaded.
+
+  Accepts a function atom of a function in the current module. The function
+  must have arity 0 (no arguments) and has to return `:ok`, otherwise the
+  loading of the module will be aborted. For example:
+
+      defmodule M do
+        @on_load :load_check
+
+        def load_check do
+          if some_condition() do
+            :ok
+          else
+            :abort
           end
+        end
 
-      And then a module may use it as:
+        def some_condition do
+          false
+        end
+      end
 
-          defmodule URI.HTTP do
-            @behaviour URI.Parser
-            def default_port(), do: 80
-            def parse(info), do: info
-          end
+  ### @vsn
 
-      If the behaviour changes or URI.HTTP does not implement one of the
-      callbacks, a warning will be raised.
+  Specify the module version. Accepts any valid Elixir value, for example:
 
-      Specifies an OTP or user-defined behaviour.
+      defmodule M do
+        @vsn "1.0"
+      end
 
-      ### Example
-
-          defmodule M do
-            @behaviour :gen_event
-
-            # ...
-          end
-
-    * `@callback`, `@macrocallback`, and `@optional_callbacks`
-
-      These attributes are used to define a behaviour (as shown in the
-      documentation for `@behaviour` above). `@callback` defines a function
-      callback, `@macrocallback` defines a macro callback, and
-      `@optional_callbacks` specifies which callbacks and macrocallbacks are
-      optional.
-
-    * `@compile`
-
-      Defines options for module compilation. This is used to configure
-      both Elixir and Erlang compilers, as any other compilation pass
-      added by external tools.
-
-      Multiple uses of `@compile` will accumulate instead of overriding
-      previous ones. See the "Compile options" section below.
-
-      ### Example
-
-          defmodule M do
-            @compile {:inline, myfun: 1}
-
-            def myfun(arg) do
-              to_string(arg)
-            end
-          end
-
-    * `@doc`
-
-      Provides documentation for the function or macro that follows the
-      attribute.
-
-      Accepts a string (often a heredoc) or `false` where `@doc false` will
-      make the function/macro invisible to the documentation extraction tools
-      like ExDoc.
-
-      Can be invoked more than once.
-
-      ### Example
-
-          defmodule M do
-            @doc "Hello world"
-            def hello do
-              "world"
-            end
-
-            @doc """
-            Sums `a` to `b`.
-            """
-            def sum(a, b) do
-              a + b
-            end
-          end
-
-    * `@dialyzer`
-
-      Defines warnings to request or suppress when using a version of
-      `:dialyzer` that supports module attributes.
-
-      Accepts an atom, a tuple, or a list of atoms and tuples.
-
-      For the list of supported warnings, see
-      [`:dialyzer` module](http://www.erlang.org/doc/man/dialyzer.html).
-
-      Multiple uses of `@dialyzer` will accumulate instead of overriding
-      previous ones.
-
-      ### Example
-
-          defmodule M do
-            @dialyzer {:nowarn_function, myfun: 1}
-
-            def myfun(arg) do
-              M.not_a_function(arg)
-            end
-          end
-
-    * `@external_resource`
-
-      Specifies an external resource to the current module.
-
-      Many times a module embeds information from an external file. This
-      attribute allows the module to annotate which external resources
-      have been used.
-
-      Tools like Mix may use this information to ensure the module is
-      recompiled in case any of the external resources change.
-
-    * `@file`
-
-      Changes the filename used in stacktraces for the function or macro that
-      follows the attribute.
-
-      Accepts a string. Can be used more than once.
-
-      ### Example
-
-          defmodule M do
-            @doc "Hello world"
-            @file "hello.ex"
-            def hello do
-              "world"
-            end
-          end
-
-    * `@moduledoc`
-
-      Provides documentation for the current module.
-
-      Accepts a string (which is often a heredoc) or `false` where
-      `@moduledoc false` will make the module invisible to the
-      documentation extraction tools like ExDoc.
-
-      ### Example
-
-          defmodule M do
-            @moduledoc """
-            A very useful module
-            """
-          end
-
-    * `@on_definition`
-
-      A hook that will be invoked when each function or macro in the current
-      module is defined. Useful when annotating functions.
-
-      Accepts a module or a tuple `{<module>, <function atom>}`. See the
-      "Compile callbacks" section below.
-
-    * `@on_load`
-
-      A hook that will be invoked whenever the module is loaded.
-
-      Accepts a function atom of a function in the current module. The function
-      must have arity 0 (no arguments) and has to return `:ok`, otherwise the
-      loading of the module will be aborted.
-
-      ### Example
-
-          defmodule M do
-            @on_load :load_check
-
-            def load_check do
-              if some_condition() do
-                :ok
-              else
-                nil
-              end
-            end
-
-            def some_condition do
-              false
-            end
-          end
-
-    * `@vsn`
-
-      Specify the module version. Accepts any valid Elixir value.
-
-      ### Example
-
-          defmodule M do
-            @vsn "1.0"
-          end
+  ### Typespec attributes
 
   The following attributes are part of typespecs and are also reserved by
   Elixir:
@@ -239,6 +205,8 @@ defmodule Module do
     * `@macrocallback` - provides a specification for a macro behaviour callback
     * `@optional_callbacks` - specifies which behaviour callbacks and macro
       behaviour callbacks are optional
+
+  ### Custom attributes
 
   In addition to the built-in attributes outlined above, custom attributes may
   also be added. A custom attribute is any valid identifier prefixed with an
@@ -256,7 +224,7 @@ defmodule Module do
   There are three callbacks that are invoked when functions are defined,
   as well as before and immediately after the module bytecode is generated.
 
-  ### `@after_compile`
+  ### @after_compile
 
   A hook that will be invoked right after the current module is compiled.
 
@@ -275,7 +243,7 @@ defmodule Module do
         end
       end
 
-  ### `@before_compile`
+  ### @before_compile
 
   A hook that will be invoked before the module is compiled.
 
@@ -305,7 +273,7 @@ defmodule Module do
         @before_compile A
       end
 
-  ### `@on_definition`
+  ### @on_definition
 
   A hook that will be invoked when each function or macro in the current
   module is defined. Useful when annotating functions.
@@ -367,10 +335,10 @@ defmodule Module do
   below:
 
     * `@compile :debug_info` - includes `:debug_info` regardless of the
-      setting in `Code.compiler_options`
+      setting in `Code.compiler_options/1`
 
     * `@compile {:debug_info, false}` - disables `:debug_info` regardless
-      of the setting in `Code.compiler_options`
+      of the setting in `Code.compiler_options/1`
 
     * `@compile {:inline, some_fun: 2, other_fun: 3}` - inlines the given
       name/arity pairs
@@ -428,18 +396,24 @@ defmodule Module do
 
       Foo.sum(1, 2) #=> 3
 
-  For convenience, you can pass `__ENV__` as an argument and
-  all options will be automatically extracted from the environment:
+  For convenience, you can pass any `Macro.Env` struct, such
+  as  `__ENV__/0`, as the first argument or as options. Both
+  the module and all options will be automatically extracted
+  from the environment:
 
       defmodule Foo do
         contents = quote do: (def sum(a, b), do: a + b)
-        Module.eval_quoted __MODULE__, contents, [], __ENV__
+        Module.eval_quoted __ENV__, contents
       end
 
       Foo.sum(1, 2) #=> 3
 
+  Note that if you pass a `Macro.Env` struct as first argument
+  while also passing `opts`, they will be merged with `opts`
+  having precedence.
+
   """
-  def eval_quoted(module, quoted, binding \\ [], opts \\ [])
+  def eval_quoted(module_or_env, quoted, binding \\ [], opts \\ [])
 
   def eval_quoted(%Macro.Env{} = env, quoted, binding, opts) do
     eval_quoted(env.module, quoted, binding, Keyword.merge(Map.to_list(env), opts))
@@ -904,6 +878,7 @@ defmodule Module do
       end
 
     :ets.insert(table, {key, new})
+    value
   end
 
   @doc """

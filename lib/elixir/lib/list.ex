@@ -74,7 +74,7 @@ defmodule List do
   The rationale behind this behaviour is to better support
   Erlang libraries which may return text as charlists
   instead of Elixir strings. One example of such functions
-  is `Application.loaded_applications`:
+  is `Application.loaded_applications/0`:
 
       Application.loaded_applications
       #=>  [{:stdlib, 'ERTS  CXC 138 10', '2.6'},
@@ -730,6 +730,109 @@ defmodule List do
       {:incomplete, encoded, rest} ->
         raise UnicodeConversionError, encoded: encoded, rest: rest, kind: :incomplete
     end
+  end
+
+  @doc """
+  Returns a keyword list that represents an *edit script*.
+
+  The algorithm is outlined in the
+  "An O(ND) Difference Algorithm and Its Variations" paper by E. Myers.
+
+  An *edit script* is a keyword list. Each key describes the "editing action" to
+  take in order to bring `list1` closer to being equal to `list2`; a key can be
+  `:eq`, `:ins`, or `:del`. Each value is a sublist of either `list1` or `list2`
+  that should be inserted (if the corresponding key `:ins`), deleted (if the
+  corresponding key is `:del`), or left alone (if the corresponding key is
+  `:eq`) in `list1` in order to be closer to `list2`.
+
+  ## Examples
+
+      iex> List.myers_difference([1, 4, 2, 3], [1, 2, 3, 4])
+      [eq: [1], del: [4], eq: [2, 3], ins: [4]]
+
+  """
+  @spec myers_difference(list, list) :: [{:eq | :ins | :del, list}] | nil
+  def myers_difference(list1, list2) when is_list(list1) and is_list(list2) do
+    path = {0, 0, list1, list2, []}
+    find_script(0, length(list1) + length(list2), [path])
+  end
+
+  defp find_script(envelope, max, _paths) when envelope > max do
+    nil
+  end
+
+  defp find_script(envelope, max, paths) do
+    case each_diagonal(-envelope, envelope, paths, []) do
+      {:done, edits} -> compact_reverse(edits, [])
+      {:next, paths} -> find_script(envelope + 1, max, paths)
+    end
+  end
+
+  defp compact_reverse([], acc), do: acc
+
+  defp compact_reverse([{kind, elem} | rest], [{kind, result} | acc]) do
+    compact_reverse(rest, [{kind, [elem | result]} | acc])
+  end
+
+  defp compact_reverse([{kind, elem} | rest], acc) do
+    compact_reverse(rest, [{kind, [elem]} | acc])
+  end
+
+  defp each_diagonal(diag, limit, _paths, next_paths) when diag > limit do
+    {:next, Enum.reverse(next_paths)}
+  end
+
+  defp each_diagonal(diag, limit, paths, next_paths) do
+    {path, rest} = proceed_path(diag, limit, paths)
+    with {:cont, path} <- follow_snake(path) do
+      each_diagonal(diag + 2, limit, rest, [path | next_paths])
+    end
+  end
+
+  defp proceed_path(0, 0, [path]), do: {path, []}
+
+  defp proceed_path(diag, limit, [path | _] = paths) when diag == -limit do
+    {move_down(path), paths}
+  end
+
+  defp proceed_path(diag, limit, [path]) when diag == limit do
+    {move_right(path), []}
+  end
+
+  defp proceed_path(_diag, _limit, [path1, path2 | rest]) do
+    if elem(path1, 1) > elem(path2, 1) do
+      {move_right(path1), [path2 | rest]}
+    else
+      {move_down(path2), [path2 | rest]}
+    end
+  end
+
+  defp move_right({x, y, list1, [elem | rest], edits}) do
+    {x + 1, y, list1, rest, [{:ins, elem} | edits]}
+  end
+
+  defp move_right({x, y, list1, [], edits}) do
+    {x + 1, y, list1, [], edits}
+  end
+
+  defp move_down({x, y, [elem | rest], list2, edits}) do
+    {x, y + 1, rest, list2, [{:del, elem} | edits]}
+  end
+
+  defp move_down({x, y, [], list2, edits}) do
+    {x, y + 1, [], list2, edits}
+  end
+
+  defp follow_snake({x, y, [elem | rest1], [elem | rest2], edits}) do
+    follow_snake({x + 1, y + 1, rest1, rest2, [{:eq, elem} | edits]})
+  end
+
+  defp follow_snake({_x, _y, [], [], edits}) do
+    {:done, edits}
+  end
+
+  defp follow_snake(path) do
+    {:cont, path}
   end
 
   ## Helpers

@@ -47,9 +47,9 @@ defmodule ExUnit.Assertions do
 
   In general, a developer will want to use the general
   `assert` macro in tests. This macro introspects your code
-  and provide good reporting whenever there is a failure.
+  and provides good reporting whenever there is a failure.
   For example, `assert some_fun() == 10` will fail (assuming
-  `some_fun()` returns 13):
+  `some_fun()` returns `13`):
 
       Comparison (using ==) failed in:
       code: some_fun() == 10
@@ -65,8 +65,8 @@ defmodule ExUnit.Assertions do
   @doc """
   Asserts its argument is a truthy value.
 
-  `assert` instrospects the underlying expression and provide
-  good  reporting whenever there is a failure. For example,
+  `assert` introspects the underlying expression and provides
+  good reporting whenever there is a failure. For example,
   if the expression uses the comparison operator, the message
   will show the values of the two sides. The assertion
 
@@ -403,9 +403,33 @@ defmodule ExUnit.Assertions do
             {received, unquote(vars)}
         after
           timeout ->
-            failure_message = unquote(failure_message) || "No message matching #{unquote(binary)} after #{timeout}ms."
-            flunk(failure_message <> ExUnit.Assertions.__pins__(unquote(pins))
-                          <> ExUnit.Assertions.__mailbox__(self()))
+            {:messages, messages} = Process.info(self(), :messages)
+
+            pattern_finder = fn message ->
+              case message do
+                unquote(pattern) ->
+                  _ = unquote(vars)
+                  true
+                _ ->
+                  false
+              end
+            end
+
+            if Enum.any?(messages, pattern_finder) do
+              flunk(unquote(failure_message) || """
+              Found message matching #{unquote(binary)} after #{timeout}ms.
+
+              This means the message was delivered too close to the timeout value, you may want to either:
+
+                1. Give an increased timeout to `assert_receive/2`
+                2. Increase the default timeout to all `assert_receive` in your
+                   test_helper.exs by setting ExUnit.configure(assert_receive_timeout: ...)
+              """)
+            else
+              failure_message = unquote(failure_message) || "No message matching #{unquote(binary)} after #{timeout}ms."
+              flunk(failure_message <> ExUnit.Assertions.__pins__(unquote(pins))
+                                    <> ExUnit.Assertions.__mailbox__(messages))
+            end
         end
 
       received
@@ -416,8 +440,7 @@ defmodule ExUnit.Assertions do
   @max_mailbox_length 10
 
   @doc false
-  def __mailbox__(pid) do
-    {:messages, messages} = Process.info(pid, :messages)
+  def __mailbox__(messages) do
     length = length(messages)
     mailbox =
       messages

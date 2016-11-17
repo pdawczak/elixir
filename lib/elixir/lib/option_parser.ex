@@ -13,7 +13,7 @@ defmodule OptionParser do
   end
 
   @doc """
-  Parses `argv` into a keywords list.
+  Parses `argv` into a keyword list.
 
   It returns a three-element tuple with the form `{parsed, args, invalid}`, where:
 
@@ -70,7 +70,7 @@ defmodule OptionParser do
   specifies the type for the value of this switch (see the "Types" section below
   for the possible types and more information about type casting).
 
-  Note that you should only supply the `:switches` or `:strict` option.
+  Note that you should only supply the `:switches` or the`:strict` option.
   If you supply both, an `ArgumentError` exception will be raised.
 
   ### Types
@@ -378,30 +378,50 @@ defmodule OptionParser do
   end
 
   @doc """
-  Receives a key-value enumerable and converts it to argv.
+  Receives a key-value enumerable and converts it to `t:argv/0`.
 
   Keys must be atoms. Keys with `nil` value are discarded,
   boolean values are converted to `--key` or `--no-key`
   (if the value is `true` or `false`, respectively),
-  and all other values are converted using `to_string/1`.
+  and all other values are converted using `Kernel.to_string/1`.
+
+  It is advised to pass to `to_argv/2` the same set of `options`
+  given to `parse/2`. Some switches can only be reconstructed
+  correctly with the `switches` information in hand.
 
   ## Examples
 
       iex>  OptionParser.to_argv([foo_bar: "baz"])
       ["--foo-bar", "baz"]
-
       iex>  OptionParser.to_argv([bool: true, bool: false, discarded: nil])
       ["--bool", "--no-bool"]
 
+  Some switches will output different values based on the switches
+  flag:
+
+      iex> OptionParser.to_argv([number: 2], switches: [])
+      ["--number", "2"]
+      iex> OptionParser.to_argv([number: 2], switches: [number: :count])
+      ["--number", "--number"]
+
   """
-  @spec to_argv(Enumerable.t) :: argv
-  def to_argv(enum) do
+  @spec to_argv(Enumerable.t, options) :: argv
+  def to_argv(enum, opts \\ []) do
+    switches = Keyword.get(opts, :switches, [])
     Enum.flat_map(enum, fn
       {_key, nil}  -> []
       {key, true}  -> [to_switch(key)]
       {key, false} -> [to_switch(key, "--no-")]
-      {key, value} -> [to_switch(key), to_string(value)]
+      {key, value} -> to_argv(key, value, switches)
     end)
+  end
+
+  defp to_argv(key, value, switches) do
+    if switches[key] == :count do
+      List.duplicate(to_switch(key), value)
+    else
+      [to_switch(key), to_string(value)]
+    end
   end
 
   defp to_switch(key, prefix \\ "--") when is_atom(key) do
@@ -409,7 +429,7 @@ defmodule OptionParser do
   end
 
   @doc ~S"""
-  Splits a string into argv chunks.
+  Splits a string into `t:argv/0` chunks.
 
   This function splits the given `string` into a list of strings in a similar
   way to many shells.
@@ -660,25 +680,25 @@ defmodule OptionParser do
     match?({_, ""}, Float.parse(arg))
   end
 
-  defp format_errors(errors, opts) do
+  defp format_errors([_ | _] = errors, opts) do
     types = opts[:switches] || opts[:strict]
-    info  = Enum.map(errors, &format_error(&1, opts, types))
-    total = length(errors)
-    error = if total == 1, do: "error", else: "errors"
-    "#{total} #{error} found!#{info}"
+    error_count = length(errors)
+    error = if error_count == 1, do: "error", else: "errors"
+    "#{error_count} #{error} found!\n" <>
+      Enum.map_join(errors, "\n", &format_error(&1, opts, types))
   end
 
   defp format_error({option, nil}, opts, types) do
     if type = get_type(option, opts, types) do
-      "\n#{option} : Missing argument of type #{type}"
+      "#{option} : Missing argument of type #{type}"
     else
-      "\n#{option} : Unknown option"
+      "#{option} : Unknown option"
     end
   end
 
   defp format_error({option, value}, opts, types) do
     type = get_type(option, opts, types)
-    "\n#{option} : Expected type #{type}, got #{inspect value}"
+    "#{option} : Expected type #{type}, got #{inspect value}"
   end
 
   defp get_type(option, opts, types) do

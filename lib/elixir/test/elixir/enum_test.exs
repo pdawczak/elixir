@@ -72,15 +72,16 @@ defmodule EnumTest do
     assert Enum.concat([[], []]) == []
     assert Enum.concat([[]])     == []
     assert Enum.concat([])       == []
-
-    assert Enum.concat([1..5, fn acc, _ -> acc end, [1]]) == [1, 2, 3, 4, 5, 1]
   end
 
   test "concat/2" do
     assert Enum.concat([], [1]) == [1]
     assert Enum.concat([1, [2], 3], [4, 5]) == [1, [2], 3, 4, 5]
 
+    assert Enum.concat([1, 2], 3..5) == [1, 2, 3, 4, 5]
+
     assert Enum.concat([], []) == []
+    assert Enum.concat([], 1..3) == [1, 2, 3]
 
     assert Enum.concat(fn acc, _ -> acc end, [1]) == [1]
   end
@@ -198,7 +199,7 @@ defmodule EnumTest do
     assert Enum.filter([1, 2, false, 3, nil], & &1) == [1, 2, 3]
     assert Enum.filter([1, 2, 3], &match?(1, &1)) == [1]
     assert Enum.filter([1, 2, 3], &match?(x when x < 3, &1)) == [1, 2]
-    assert Enum.filter([1, 2, 3], &match?(_, &1)) == [1, 2, 3]
+    assert Enum.filter([1, 2, 3], fn _ -> true end) == [1, 2, 3]
   end
 
   test "filter_map/3" do
@@ -759,6 +760,20 @@ defmodule EnumTest do
     assert Enum.zip([1], []) == []
     assert Enum.zip([], [])  == []
   end
+
+  test "zip/1" do
+    assert Enum.zip([[:a, :b], [1, 2], ["foo", "bar"]]) == [{:a, 1, "foo"}, {:b, 2, "bar"}]
+    assert Enum.zip([[:a, :b], [1, 2, 3, 4], ["foo", "bar", "baz", "qux"]]) == [{:a, 1, "foo"}, {:b, 2, "bar"}]
+    assert Enum.zip([[:a, :b, :c, :d], [1, 2], ["foo", "bar", "baz", "qux"]]) == [{:a, 1, "foo"}, {:b, 2, "bar"}]
+    assert Enum.zip([[:a, :b, :c, :d], [1, 2, 3, 4], ["foo", "bar"]]) == [{:a, 1, "foo"}, {:b, 2, "bar"}]
+    assert Enum.zip([1..10, ["foo", "bar"]]) == [{1, "foo"}, {2, "bar"}]
+
+    assert Enum.zip([]) == []
+    assert Enum.zip([[]]) == []
+    assert Enum.zip([[1]]) == [{1}]
+
+    assert Enum.zip([[], [], [], []])  == []
+  end
 end
 
 defmodule EnumTest.Range do
@@ -804,12 +819,15 @@ defmodule EnumTest.Range do
   end
 
   test "concat/1" do
-    assert Enum.concat(1..3, []) == [1, 2, 3]
-    assert Enum.concat(1..3, 0..0) == [1, 2, 3, 0]
+    assert Enum.concat([1..2, 4..6]) == [1, 2, 4, 5, 6]
+    assert Enum.concat([1..5, fn acc, _ -> acc end, [1]]) == [1, 2, 3, 4, 5, 1]
   end
 
   test "concat/2" do
     assert Enum.concat(1..3, 4..5) == [1, 2, 3, 4, 5]
+    assert Enum.concat(1..3, [4, 5]) == [1, 2, 3, 4, 5]
+    assert Enum.concat(1..3, []) == [1, 2, 3]
+    assert Enum.concat(1..3, 0..0) == [1, 2, 3, 0]
   end
 
   test "count/1" do
@@ -944,7 +962,7 @@ defmodule EnumTest.Range do
 
     assert Enum.filter(1..3, &match?(1, &1)) == [1]
     assert Enum.filter(1..3, &match?(x when x < 3, &1)) == [1, 2]
-    assert Enum.filter(1..3, &match?(_, &1)) == [1, 2, 3]
+    assert Enum.filter(1..3, fn _ -> true end) == [1, 2, 3]
   end
 
   test "filter_map/3" do

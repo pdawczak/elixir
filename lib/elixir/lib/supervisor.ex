@@ -95,6 +95,7 @@ defmodule Supervisor do
   explicitly defining a supervision module:
 
       defmodule MyApp.Supervisor do
+        # Automatically imports Supervisor.Spec
         use Supervisor
 
         def start_link do
@@ -295,14 +296,14 @@ defmodule Supervisor do
   end
 
   @doc """
-  Starts a supervisor module with the given `arg`.
+  Starts a supervisor process with the given `module` and `arg`.
 
-  To start the supervisor, the `init/1` callback will be invoked in the given
-  `module`, with `arg` as its argument. The `init/1` callback must return a
+  To start the supervisor, the `c:init/1` callback will be invoked in the given
+  `module`, with `arg` as its argument. The `c:init/1` callback must return a
   supervisor specification which can be created with the help of the functions
   in the `Supervisor.Spec` module (especially `Supervisor.Spec.supervise/2`).
 
-  If the `init/1` callback returns `:ignore`, this function returns
+  If the `c:init/1` callback returns `:ignore`, this function returns
   `:ignore` as well and the supervisor terminates with reason `:normal`.
   If it fails or returns an incorrect value, this function returns
   `{:error, term}` where `term` is a term with information about the

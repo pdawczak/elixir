@@ -5,12 +5,12 @@ defmodule Mix.Tasks.TestTest do
 
   import Mix.Tasks.Test, only: [ex_unit_opts: 1]
 
-  test "ex_unit_opts returns ex unit options" do
+  test "ex_unit_opts/1 returns ex unit options" do
     assert ex_unit_opts([unknown: "ok", seed: 13]) ==
            [autorun: false, seed: 13]
   end
 
-  test "ex_unit_opts returns includes and excludes" do
+  test "ex_unit_opts/1 returns includes and excludes" do
     assert ex_unit_opts([include: "focus", include: "key:val"]) ==
            [autorun: false, include: [:focus, key: "val"]]
 
@@ -18,17 +18,21 @@ defmodule Mix.Tasks.TestTest do
            [autorun: false, exclude: [:focus, key: "val"]]
   end
 
-  test "ex_unit_opts translates only into includes and excludes" do
+  test "ex_unit_opts/1 translates :only into includes and excludes" do
     assert ex_unit_opts([only: "focus"]) ==
-           [autorun: false, exclude: [:test], include: [:focus]]
+           [autorun: false, include: [:focus], exclude: [:test]]
 
     assert ex_unit_opts([only: "focus", include: "special"]) ==
-           [autorun: false, exclude: [:test], include: [:focus, :special]]
+           [autorun: false, include: [:focus, :special], exclude: [:test]]
   end
 
-  test "ex_unit_opts translates :color into list containing an enabled key/value pair" do
+  test "ex_unit_opts/1 translates :color into list containing an enabled key/value pair" do
     assert ex_unit_opts([color: false]) == [autorun: false, colors: [enabled: false]]
     assert ex_unit_opts([color: true]) == [autorun: false, colors: [enabled: true]]
+  end
+
+  test "ex_unit_opts/1 translates :formatter into list of modules" do
+    assert ex_unit_opts([formatter: "A.B"]) == [autorun: false, formatters: [A.B]]
   end
 
   test "--stale: runs all tests for first run, then none on second" do

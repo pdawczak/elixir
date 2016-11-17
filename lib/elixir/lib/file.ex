@@ -456,7 +456,7 @@ defmodule File do
   specify the `destination` filename, it is not sufficient to simply specify
   its directory.
 
-  It returns `:ok` in case of success, returns `{:error, reason}` otherwise.
+  Returns `:ok` in case of success, `{:error, reason}` otherwise.
 
   Note: The command `mv` in Unix systems behaves differently depending
   if `source` is a file and the `destination` is an existing directory.
@@ -922,7 +922,7 @@ defmodule File do
   end
 
   @doc ~S"""
-  Opens the given `path` according to the given list of `modes`.
+  Opens the given `path`.
 
   In order to write and read files, one must use the functions
   in the `IO` module. By default, a file is opened in `:binary` mode,
@@ -930,6 +930,12 @@ defmodule File do
   to interact with the file. A developer may pass `:utf8` as an
   option when opening the file and then all other functions from
   `IO` are available, since they work directly with Unicode data.
+
+  `modes_or_function` can either be a list of modes or a function. If it's a
+  list, it's considered to be a list of modes (that are documented below). If
+  it's a function, then it's equivalent to calling `open(path, [],
+  modes_or_function)`. See the documentation for `open/3` for more information
+  on this function.
 
   The allowed modes:
 
@@ -996,13 +1002,13 @@ defmodule File do
   """
   @spec open(Path.t, [mode | :ram]) :: {:ok, io_device} | {:error, posix}
   @spec open(Path.t, (io_device -> res)) :: {:ok, res} | {:error, posix} when res: var
-  def open(path, modes \\ [])
+  def open(path, modes_or_function \\ [])
 
   def open(path, modes) when is_list(modes) do
     F.open(IO.chardata_to_string(path), normalize_modes(modes, true))
   end
 
-  def open(path, function) when is_function(function) do
+  def open(path, function) when is_function(function, 1) do
     open(path, [], function)
   end
 
@@ -1013,7 +1019,7 @@ defmodule File do
   automatically closed after the function returns, regardless
   if there was an error when executing the function.
 
-  It returns `{:ok, function_result}` in case of success,
+  Returns `{:ok, function_result}` in case of success,
   `{:error, reason}` otherwise.
 
   This function expects the file to be closed with success,
@@ -1027,43 +1033,51 @@ defmodule File do
         IO.read(file, :line)
       end)
 
+  See `open/2` for the list of available `modes`.
   """
   @spec open(Path.t, [mode | :ram], (io_device -> res)) :: {:ok, res} | {:error, posix} when res: var
-  def open(path, modes, function) do
+  def open(path, modes, function) when is_list(modes) and is_function(function, 1) do
     case open(path, modes) do
-      {:ok, device} ->
+      {:ok, io_device} ->
         try do
-          {:ok, function.(device)}
+          {:ok, function.(io_device)}
         after
-          :ok = close(device)
+          :ok = close(io_device)
         end
       other -> other
     end
   end
 
   @doc """
-  Same as `open/2` but raises an error if file could not be opened.
+  Similar to `open/2` but raises an error if file could not be opened.
 
-  Returns the `io_device` otherwise.
+  Returns the IO device otherwise.
+
+  See `open/2` for the list of available modes.
   """
-  @spec open!(Path.t, [mode]) :: io_device | no_return
-  def open!(path, modes \\ []) do
-    case open(path, modes) do
-      {:ok, device}    -> device
+  @spec open!(Path.t, [mode | :ram]) :: io_device | no_return
+  @spec open!(Path.t, (io_device -> res)) :: res | no_return when res: var
+  def open!(path, modes_or_function \\ []) do
+    case open(path, modes_or_function) do
+      {:ok, io_device_or_function_result} ->
+        io_device_or_function_result
       {:error, reason} ->
         raise File.Error, reason: reason, action: "open", path: IO.chardata_to_string(path)
     end
   end
 
   @doc """
-  Same as `open/3` but raises an error if file could not be opened.
+  Similar to `open/3` but raises an error if file could not be opened.
 
-  Returns the function result otherwise.
+  If it succeeds opening the file, it returns the `function` result on the IO device.
+
+  See `open/2` for the list of available `modes`.
   """
   @spec open!(Path.t, [mode | :ram], (io_device -> res)) :: res | no_return when res: var
   def open!(path, modes, function) do
     case open(path, modes, function) do
-      {:ok, device}    -> device
+      {:ok, function_result} ->
+        function_result
       {:error, reason} ->
         raise File.Error, reason: reason, action: "open", path: IO.chardata_to_string(path)
     end
@@ -1151,7 +1165,7 @@ defmodule File do
   @doc """
   Returns the list of files in the given directory.
 
-  It returns `{:ok, [files]}` in case of success,
+  Returns `{:ok, [files]}` in case of success,
   `{:error, reason}` otherwise.
   """
   @spec ls(Path.t) :: {:ok, [binary]} | {:error, posix}
@@ -1182,7 +1196,7 @@ defmodule File do
 
   Note that if the option `:delayed_write` was used when opening the file,
   `close/1` might return an old write error and not even try to close the file.
-  See `open/2`.
+  See `open/2` for more information.
   """
   @spec close(io_device) :: :ok | {:error, posix | :badarg | :terminated}
   def close(io_device) do
@@ -1210,7 +1224,7 @@ defmodule File do
   in raw mode for performance reasons. Therefore, Elixir **will** open
   streams in `:raw` mode with the `:read_ahead` option unless an encoding
   is specified. This means any data streamed into the file must be
-  converted to `iodata` type. If you pass `[:utf8]` in the modes parameter,
+  converted to `t:iodata/0` type. If you pass `[:utf8]` in the modes parameter,
   the underlying stream will use `IO.write/2` and the `String.Chars` protocol
   to convert the data. See `IO.binwrite/2` and `IO.write/2` .
 
@@ -1221,7 +1235,7 @@ defmodule File do
 
       # Read in 2048 byte chunks rather than lines
       File.stream!("./test/test.data", [], 2048)
-      #=>  %File.Stream{line_or_bytes: 2048, modes: [:raw, :read_ahead, :binary],
+      #=> %File.Stream{line_or_bytes: 2048, modes: [:raw, :read_ahead, :binary],
       #=> path: "./test/test.data", raw: true}
 
   See `Stream.run/1` for an example of streaming into a file.

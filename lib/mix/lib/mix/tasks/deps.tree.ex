@@ -13,16 +13,16 @@ defmodule Mix.Tasks.Deps.Tree do
 
   ## Command line options
 
-    * `--only` - the enviroment to show dependencies for
+    * `--only` - the environment to show dependencies for
 
     * `--exclude` - exclude dependencies which you do not want to see printed.
 
     * `--format` - Can be set to one of either:
 
-      * `pretty` - use Unicode codepoints for formatting the tree.
+      * `pretty` - uses Unicode codepoints for formatting the tree.
         This is the default except on Windows.
 
-      * `plain` - do not use Unicode codepoints for formatting the tree.
+      * `plain` - does not use Unicode codepoints for formatting the tree.
         This is the default on Windows.
 
       * `dot` - produces a DOT graph description of the dependency tree

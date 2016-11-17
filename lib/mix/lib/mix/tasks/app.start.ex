@@ -17,7 +17,7 @@ defmodule Mix.Tasks.App.Start do
   ## Configuration
 
     * `:start_permanent` - the application and all of its children
-      applications are started in permanent mode
+      applications are started in permanent mode. Defaults to `false`.
 
     * `:consolidate_protocols` - when `true`, loads consolidated
       protocols before start. The default value is `true`.
@@ -27,15 +27,15 @@ defmodule Mix.Tasks.App.Start do
 
   ## Command line options
 
-    * `--force` - force compilation regardless of compilation times
-    * `--temporary` - start the application as temporary
-    * `--permanent` - start the application as permanent
-    * `--no-compile` - do not compile even if files require compilation
-    * `--no-protocols` - do not load consolidated protocols
-    * `--no-archives-check` - do not check archives
-    * `--no-deps-check` - do not check dependencies
-    * `--no-elixir-version-check` - do not check Elixir version
-    * `--no-start` - do not start applications after compilation
+    * `--force` - forces compilation regardless of compilation times
+    * `--temporary` - starts the application as temporary
+    * `--permanent` - starts the application as permanent
+    * `--no-compile` - does not compile even if files require compilation
+    * `--no-protocols` - does not load consolidated protocols
+    * `--no-archives-check` - does not check archives
+    * `--no-deps-check` - does not check dependencies
+    * `--no-elixir-version-check` - does not check Elixir version
+    * `--no-start` - does not start applications after compilation
 
   """
   @spec run(OptionParser.argv) :: :ok
@@ -86,7 +86,7 @@ defmodule Mix.Tasks.App.Start do
     apps =
       cond do
         Mix.Project.umbrella?(config) ->
-          for %Mix.Dep{app: app} <- Mix.Dep.Umbrella.loaded, do: app
+          for %Mix.Dep{app: app} <- Mix.Dep.Umbrella.cached, do: app
         app = config[:app] ->
           [app]
         true ->

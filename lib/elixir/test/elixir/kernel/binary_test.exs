@@ -41,11 +41,11 @@ bar \"""
     """, "bar")
   end
 
-  test "utf8" do
+  test "UTF-8" do
     assert byte_size(" ゆんゆん") == 13
   end
 
-  test "utf8 char" do
+  test "UTF-8 char" do
     assert ?ゆ == 12422
     assert ?\ゆ == 12422
   end
@@ -66,6 +66,10 @@ bar \"""
     size = 3
     <<x::binary-size(size)>> <> _ = "foobar"
     assert x == "foo"
+
+    size = 16
+    <<x::size(size)>> <> _ = "foobar"
+    assert x == 26223
 
     <<x::6*4-binary>> <> _ = "foobar"
     assert x == "foo"
@@ -172,7 +176,7 @@ bar \"""
 
   test "bitsyntax size shortcut" do
     assert <<1::3>> == <<1::size(3)>>
-    assert <<1::3 * 8>> == <<1::size(3)-unit(8)>>
+    assert <<1::3*8>> == <<1::size(3)-unit(8)>>
   end
 
   test "bitsyntax variable size" do

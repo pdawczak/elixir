@@ -15,20 +15,69 @@ Operator                                                                        
 `+` `-`                                                                                  | Left to right
 `++` `--` `..` `<>`                                                                      | Right to left
 `in`                                                                                     | Left to right
-<code>&#124;></code> `<<<` `>>>` `~>>` `<<~` `~>` `<~` `<~>` <code>&lt;&#124;&gt;</code> | Left to right
+`\|>` `<<<` `>>>` `~>>` `<<~` `~>` `<~` `<~>` `<\|>`                                     | Left to right
 `<` `>` `<=` `>=`                                                                        | Left to right
 `==` `!=` `=~` `===` `!==`                                                               | Left to right
 `&&` `&&&` `and`                                                                         | Left to right
-<code>&#124;&#124;</code> <code>&#124;&#124;&#124;</code> `or`                           | Left to right
+`\|\|` `\|\|\|` `or`                                                                     | Left to right
 `=`                                                                                      | Right to left
 `=>`                                                                                     | Right to left
-<code>&#124;</code>                                                                      | Right to left
+`\|`                                                                                     | Right to left
 `::`                                                                                     | Right to left
 `when`                                                                                   | Right to left
 `<-`, `\\`                                                                               | Left to right
 `&`                                                                                      | Unary
 
-## Defining custom operators
+## Comparison operators
+
+Elixir provides the following built-in comparison operators:
+
+  * `==` - equality
+  * `===` - strict equality
+  * `!=` - inequality
+  * `!==` - strict inequality
+  * `>` - greater than
+  * `<` - less than
+  * `>=` - greater than or equal
+  * `<=` - less than or equal
+
+The only difference between `==` and `===` is that `===` is stricter when it comes to comparing integers and floats:
+
+```elixir
+iex> 1 == 1.0
+true
+iex> 1 === 1.0
+false
+```
+
+`!=` and `!==` act as the negation of `==` and `===`, respectively.
+
+### Term ordering
+
+In Elixir, different data types can be compared using comparison operators:
+
+```elixir
+iex> 1 < :an_atom
+true
+```
+
+The reason we can compare different data types is pragmatism. Sorting algorithms don’t need to worry about different data types in order to sort. For reference, the overall sorting order is defined below:
+
+```
+number < atom < reference < function < port < pid < tuple < map < list < bitstring
+```
+
+When comparing two numbers of different types (a number is either an integer or a float), a conversion to the type with greater precision will always occur, unless the comparison operator used is either `===` or `!==`. A float will be considered more precise than an integer, unless the float is greater/less than +/-9007199254740992.0, at which point all the significant figures of the float are to the left of the decimal point. This behavior exists so that the comparison of large numbers remains transitive.
+
+The collection types are compared using the following rules:
+
+* Tuples are compared by size then element by element.
+* Maps are compared by size then by keys in ascending term order then by values in key order. In the specific case of maps' key ordering, integers are always considered to be less than floats.
+* Lists are compared element by element.
+
+## Custom and overridden operators
+
+### Defining custom operators
 
 Elixir is capable of parsing a predefined set of operators; this means that it's not possible to define new operators (like one could do in Haskell, for example). However, not all operators that Elixir can parse are *used* by Elixir: for example, `+` and `||` are used by Elixir for addition and boolean *or*, but `<~>` is not used (but valid).
 
@@ -72,7 +121,7 @@ The following is a table of all the operators that Elixir is capable of parsing,
 
 The following operators are used by the `Bitwise` module when imported: `&&&`, `^^^`, `<<<`, `>>>`, `|||`, `~~~`. See the documentation for `Bitwise` for more information.
 
-## Redefining existing operators
+### Redefining existing operators
 
 The operators that Elixir uses (for example, `+`) can be defined by any module and used in place of the ones defined by Elixir, provided they're specifically not imported from `Kernel` (which is imported everywhere by default). For example:
 
@@ -100,6 +149,6 @@ iex> 1 + 2
 -1
 ```
 
-## Final note
+### Final note
 
 While it's possible to defined unused operators (such as `<~>`) and to "override" predefined operators (such as `+`), the Elixir community generally discourages this. Custom-defined operators can be really hard to read and even more to understand, as they don't have a descriptive name like functions do. That said, some specific cases or custom domain specific languages (DSLs) may justify these practices.

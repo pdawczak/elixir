@@ -205,10 +205,9 @@ defmodule Enum do
   end
 
   @doc """
-  Invokes the given `fun` for each item in the enumerable.
+  Returns true if the given `fun` evaluates to true on all of the items in the enumerable.
+
   It stops the iteration at the first invocation that returns `false` or `nil`.
-  It returns `false` if at least one invocation returns `false` or `nil`.
-  Otherwise returns `true`.
 
   ## Examples
 
@@ -244,10 +243,9 @@ defmodule Enum do
   end
 
   @doc """
-  Invokes the given `fun` for each item in the enumerable.
-  It stops the iteration at the first invocation that returns a truthy value.
-  Returns `true` if at least one invocation returns a truthy value.
-  Otherwise returns `false`.
+  Returns true if the given `fun` evaluates to true on any of the items in the enumerable.
+
+  It stops the iteration at the first invocation that returns a truthy value (not `false` or `nil`).
 
   ## Examples
 
@@ -1653,6 +1651,10 @@ defmodule Enum do
   It assumes that the sample being returned can fit into memory;
   the input `enumerable` doesn't have to, as it is traversed just once.
 
+  If a range is passed into the function, this function will pick a
+  random value between the range limits, without traversing the whole
+  range (thus executing in constant time and constant memory).
+
   ## Examples
 
       # Although not necessary, let's seed the random algorithm
@@ -1661,6 +1663,8 @@ defmodule Enum do
       2
       iex> Enum.random([1, 2, 3])
       1
+      iex> Enum.random(1..1_000)
+      776
 
   """
   @spec random(t) :: element | no_return
@@ -1887,7 +1891,7 @@ defmodule Enum do
   """
   @spec scan(t, (element, any -> any)) :: list
   def scan(enumerable, fun) when is_function(fun, 2) do
-    {res, _} = reduce(enumerable, {[], :first}, R.scan_2(fun))
+    {res, _} = reduce(enumerable, {[], :first}, R.scan2(fun))
     :lists.reverse(res)
   end
 
@@ -1904,7 +1908,7 @@ defmodule Enum do
   """
   @spec scan(t, any, (element, any -> any)) :: list
   def scan(enumerable, acc, fun) when is_function(fun, 2) do
-    {res, _} = reduce(enumerable, {[], acc}, R.scan_3(fun))
+    {res, _} = reduce(enumerable, {[], acc}, R.scan3(fun))
     :lists.reverse(res)
   end
 
@@ -2124,10 +2128,10 @@ defmodule Enum do
   end
 
   @doc """
-  Sorts the mapped results of the enumerable according to the `sorter`
+  Sorts the mapped results of the enumerable according to the provided `sorter`
   function.
 
-  This function maps each element of the enumerable using the `mapper`
+  This function maps each element of the enumerable using the provided `mapper`
   function.  The enumerable is then sorted by the mapped elements
   using the `sorter` function, which defaults to `Kernel.<=/2`
 
@@ -2161,7 +2165,8 @@ defmodule Enum do
                 (mapped_element, mapped_element -> boolean))
                 :: list when mapped_element: element
 
-  def sort_by(enumerable, mapper, sorter \\ &<=/2) when is_function(sorter, 2) do
+  def sort_by(enumerable, mapper, sorter \\ &<=/2)
+      when is_function(mapper, 1) and is_function(sorter, 2) do
     enumerable
     |> map(&{&1, mapper.(&1)})
     |> sort(&sorter.(elem(&1, 1), elem(&2, 1)))
@@ -2621,7 +2626,30 @@ defmodule Enum do
   end
 
   def zip(enumerable1, enumerable2) do
-    Stream.zip(enumerable1, enumerable2).({:cont, []}, &{:cont, [&1 | &2]})
+    zip([enumerable1, enumerable2])
+  end
+
+  @doc """
+  Zips corresponding elements from a collection of enumerables
+  into one list of tuples.
+
+  The zipping finishes as soon as any enumerable completes.
+
+  ## Examples
+
+      iex> Enum.zip([[1, 2, 3], [:a, :b, :c], ["foo", "bar", "baz"]])
+      [{1, :a, "foo"}, {2, :b, "bar"}, {3, :c, "baz"}]
+
+      iex> Enum.zip([[1, 2, 3, 4, 5], [:a, :b, :c]])
+      [{1, :a}, {2, :b}, {3, :c}]
+
+  """
+  @spec zip([t]) :: t
+
+  def zip([]), do: []
+
+  def zip(enumerables) do
+    Stream.zip(enumerables).({:cont, []}, &{:cont, [&1 | &2]})
     |> elem(1)
     |> :lists.reverse
   end
@@ -2873,10 +2901,10 @@ defmodule Enum do
     sort_merge(list, [], fun, false)
 
   defp sort_merge([t1, [h2 | t2] | l], acc, fun, true), do:
-    sort_merge(l, [sort_merge_1(t1, h2, t2, [], fun, false) | acc], fun, true)
+    sort_merge(l, [sort_merge1(t1, h2, t2, [], fun, false) | acc], fun, true)
 
   defp sort_merge([[h2 | t2], t1 | l], acc, fun, false), do:
-    sort_merge(l, [sort_merge_1(t1, h2, t2, [], fun, false) | acc], fun, false)
+    sort_merge(l, [sort_merge1(t1, h2, t2, [], fun, false) | acc], fun, false)
 
   defp sort_merge([l], [], _fun, _bool), do: l
 
@@ -2887,10 +2915,10 @@ defmodule Enum do
     reverse_sort_merge(acc, [], fun, bool)
 
   defp reverse_sort_merge([[h2 | t2], t1 | l], acc, fun, true), do:
-    reverse_sort_merge(l, [sort_merge_1(t1, h2, t2, [], fun, true) | acc], fun, true)
+    reverse_sort_merge(l, [sort_merge1(t1, h2, t2, [], fun, true) | acc], fun, true)
 
   defp reverse_sort_merge([t1, [h2 | t2] | l], acc, fun, false), do:
-    reverse_sort_merge(l, [sort_merge_1(t1, h2, t2, [], fun, true) | acc], fun, false)
+    reverse_sort_merge(l, [sort_merge1(t1, h2, t2, [], fun, true) | acc], fun, false)
 
   defp reverse_sort_merge([l], acc, fun, bool), do:
     sort_merge([:lists.reverse(l, []) | acc], [], fun, bool)
@@ -2898,26 +2926,26 @@ defmodule Enum do
   defp reverse_sort_merge([], acc, fun, bool), do:
     sort_merge(acc, [], fun, bool)
 
-  defp sort_merge_1([h1 | t1], h2, t2, m, fun, bool) do
+  defp sort_merge1([h1 | t1], h2, t2, m, fun, bool) do
     if fun.(h1, h2) == bool do
-      sort_merge_2(h1, t1, t2, [h2 | m], fun, bool)
+      sort_merge2(h1, t1, t2, [h2 | m], fun, bool)
     else
-      sort_merge_1(t1, h2, t2, [h1 | m], fun, bool)
+      sort_merge1(t1, h2, t2, [h1 | m], fun, bool)
     end
   end
 
-  defp sort_merge_1([], h2, t2, m, _fun, _bool), do:
+  defp sort_merge1([], h2, t2, m, _fun, _bool), do:
     :lists.reverse(t2, [h2 | m])
 
-  defp sort_merge_2(h1, t1, [h2 | t2], m, fun, bool) do
+  defp sort_merge2(h1, t1, [h2 | t2], m, fun, bool) do
     if fun.(h1, h2) == bool do
-      sort_merge_2(h1, t1, t2, [h2 | m], fun, bool)
+      sort_merge2(h1, t1, t2, [h2 | m], fun, bool)
     else
-      sort_merge_1(t1, h2, t2, [h1 | m], fun, bool)
+      sort_merge1(t1, h2, t2, [h1 | m], fun, bool)
     end
   end
 
-  defp sort_merge_2(h1, t1, [], m, _fun, _bool), do:
+  defp sort_merge2(h1, t1, [], m, _fun, _bool), do:
     :lists.reverse(t1, [h1 | m])
 
   ## split

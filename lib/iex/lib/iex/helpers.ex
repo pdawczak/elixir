@@ -8,17 +8,17 @@ defmodule IEx.Helpers do
   This message was triggered by invoking the helper `h()`,
   usually referred to as `h/0` (since it expects 0 arguments).
 
-  You can use the `h` function to invoke the documentation
+  You can use the `h/1` function to invoke the documentation
   for any Elixir module or function:
 
-      h Enum
-      h Enum.map
-      h Enum.reverse/1
+      iex> h Enum
+      iex> h Enum.map
+      iex> h Enum.reverse/1
 
-  You can also use the `i` function to introspect any value
+  You can also use the `i/1` function to introspect any value
   you have in the shell:
 
-      i "hello"
+      iex> i "hello"
 
   There are many other helpers available:
 
@@ -48,9 +48,9 @@ defmodule IEx.Helpers do
     * `v/1`           - retrieves the nth value from the history
 
   Help for all of those functions can be consulted directly from
-  the command line using the `h` helper itself. Try:
+  the command line using the `h/1` helper itself. Try:
 
-      h(v/0)
+      iex> h(v/0)
 
   To learn more about IEx as a whole, type `h(IEx)`.
   """
@@ -110,11 +110,11 @@ defmodule IEx.Helpers do
 
   ## Examples
 
-      c ["foo.ex", "bar.ex"], "ebin"
-      #=> [Foo, Bar]
+      iex> c ["foo.ex", "bar.ex"], "ebin"
+      [Foo, Bar]
 
-      c "baz.ex"
-      #=> [Baz]
+      iex> c "baz.ex"
+      [Baz]
 
   """
   def c(files, path \\ :in_memory) when is_binary(path) or path == :in_memory do
@@ -174,15 +174,14 @@ defmodule IEx.Helpers do
 
   ## Examples
 
-      h(Enum)
-      #=> Prints documentation for Enum
+      iex> h(Enum)
 
   It also accepts functions in the format `fun/arity`
   and `module.fun/arity`, for example:
 
-      h receive/1
-      h Enum.all?/2
-      h Enum.all?
+      iex> h receive/1
+      iex> h Enum.all?/2
+      iex> h Enum.all?
 
   """
   @h_modules [__MODULE__, Kernel, Kernel.SpecialForms]
@@ -232,9 +231,9 @@ defmodule IEx.Helpers do
 
   ## Examples
 
-      b(Mix.Task.run/1)
-      b(Mix.Task.run)
-      b(GenServer)
+      iex> b(Mix.Task.run/1)
+      iex> b(Mix.Task.run)
+      iex> b(GenServer)
   """
   defmacro b(term)
   defmacro b({:/, _, [{{:., _, [mod, fun]}, _, []}, arity]}) do
@@ -260,9 +259,17 @@ defmodule IEx.Helpers do
 
   ## Examples
 
-      t(Enum)
-      t(Enum.t/0)
-      t(Enum.t)
+      iex> t(Enum)
+      @type t() :: Enumerable.t()
+      @type element() :: any()
+      @type index() :: integer()
+      @type default() :: any()
+
+      iex> t(Enum.t/0)
+      @type t() :: Enumerable.t()
+
+      iex> t(Enum.t)
+      @type t() :: Enumerable.t()
 
   """
   defmacro t(term)
@@ -289,11 +296,11 @@ defmodule IEx.Helpers do
 
   ## Examples
 
-      s(Enum)
-      s(Enum.all?)
-      s(Enum.all?/2)
-      s(is_atom)
-      s(is_atom/1)
+      iex> s(Enum)
+      iex> s(Enum.all?)
+      iex> s(Enum.all?/2)
+      iex> s(is_atom)
+      iex> s(is_atom/1)
 
   """
   defmacro s(term)
@@ -429,7 +436,10 @@ defmodule IEx.Helpers do
 
   """
   def i(term) do
-    info = ["Term": inspect(term)] ++ IEx.Info.info(term)
+    info =
+      ["Term": inspect(term)] ++
+      IEx.Info.info(term) ++
+      ["Implemented protocols": all_implemented_protocols_for_term(term)]
 
     for {subject, info} <- info do
       info = info |> to_string() |> String.trim() |> String.replace("\n", "\n  ")
@@ -438,6 +448,17 @@ defmodule IEx.Helpers do
     end
 
     dont_display_result()
+  end
+
+  # Given any "term", this function returns all the protocols in
+  # :code.get_path() implemented by the data structure of such term, in the form
+  # of a binary like "Protocol1, Protocol2, Protocol3".
+  defp all_implemented_protocols_for_term(term) do
+    :code.get_path()
+    |> Protocol.extract_protocols()
+    |> Enum.uniq()
+    |> Enum.reject(fn(protocol) -> is_nil(protocol.impl_for(term)) end)
+    |> Enum.map_join(", ", &inspect/1)
   end
 
   @doc """
@@ -720,12 +741,12 @@ defmodule IEx.Helpers do
 
   ## Examples
 
-      nl(HelloWorld)
-      #=> {:ok, [{:node1@easthost, :loaded, HelloWorld},
-                 {:node1@westhost, :loaded, HelloWorld}]}
+      iex> nl(HelloWorld)
+      {:ok, [{:node1@easthost, :loaded, HelloWorld},
+             {:node1@westhost, :loaded, HelloWorld}]}
 
-      nl(NoSuchModuleExists)
-      #=> {:error, :nofile}
+      iex> nl(NoSuchModuleExists)
+      {:error, :nofile}
 
   """
   def nl(nodes \\ Node.list, module) when is_list(nodes) and is_atom(module) do

@@ -51,7 +51,7 @@ defmodule Logger do
     * `:backends` - the backends to be used. Defaults to `[:console]`.
       See the "Backends" section for more information.
 
-    * `:compile_time_purge_level` - purge *at compilation time* all calls that
+    * `:compile_time_purge_level` - purges *at compilation time* all calls that
       have log level lower than the value of this option. This means that
       `Logger` calls with level lower than this option will be completely
       removed at compile time, accruing no overhead at runtime. Defaults to
@@ -228,9 +228,10 @@ defmodule Logger do
   ### Custom backends
 
   Any developer can create their own `Logger` backend.
-  Since `Logger` is an event manager powered by `GenEvent`,
+  Since `Logger` is an event manager powered by `:gen_event`,
   writing a new backend is a matter of creating an event
-  handler, as described in the `GenEvent` module.
+  handler, as described in the [`:gen_event`](http://erlang.org/doc/man/gen_event.html)
+  documentation.
 
   From now on, we will be using the term "event handler" to refer
   to your custom backend, as we head into implementation details.
@@ -254,7 +255,7 @@ defmodule Logger do
       * the first element is always the atom `Logger`
       * `message` is the actual message (as chardata)
       * `timestamp` is the timestamp for when the message was logged, as a
-        `{{year, month, day}, {hour, minute, second, milliseconds}}` tuple
+        `{{year, month, day}, {hour, minute, second, millisecond}}` tuple
       * `metadata` is a keyword list of metadata used when logging the message
 
   It is recommended that handlers ignore messages where
@@ -291,7 +292,7 @@ defmodule Logger do
   and how to process the existing options.
   """
 
-  @type backend :: GenEvent.handler
+  @type backend :: :gen_event.handler
   @type message :: IO.chardata | String.Chars.t
   @type level :: :error | :info | :warn | :debug
   @levels [:error, :info, :warn, :debug]
@@ -304,7 +305,10 @@ defmodule Logger do
   end
 
   @doc """
-  Adds the given keyword list to the current process metadata.
+  Alters the current process metadata according the given keyword list.
+
+  This will merge the given keyword list into the existing metadata. With
+  the exception of setting a key to nil will remove a key from the metadata.
   """
   def metadata(keywords) do
     {enabled?, metadata} = __metadata__()
@@ -402,8 +406,8 @@ defmodule Logger do
   """
   @spec flush :: :ok
   def flush do
-    _ = GenEvent.which_handlers(:error_logger)
-    GenEvent.sync_notify(Logger, :flush)
+    _ = :gen_event.which_handlers(:error_logger)
+    :gen_event.sync_notify(Logger, :flush)
   end
 
   @doc """
@@ -422,6 +426,8 @@ defmodule Logger do
       {:ok, _} = ok ->
         Logger.Config.add_backend(backend)
         ok
+      {:error, {:already_started, _pid}} ->
+        {:error, :already_present}
       {:error, _} = error ->
         error
     end
@@ -464,7 +470,7 @@ defmodule Logger do
   """
   @spec configure_backend(backend, Keyword.t) :: term
   def configure_backend(backend, options) when is_list(options) do
-    GenEvent.call(Logger, Logger.Config.translate_backend(backend), {:configure, options})
+    :gen_event.call(Logger, Logger.Config.translate_backend(backend), {:configure, options})
   end
 
   @doc """
@@ -473,9 +479,9 @@ defmodule Logger do
   Use this function only when there is a need to
   explicitly avoid embedding metadata.
   """
-  @spec bare_log(level, message | (() -> message), Keyword.t) ::
+  @spec bare_log(level, message | (() -> message | {message, Keyword.t}), Keyword.t) ::
         :ok | {:error, :noproc} | {:error, term}
-  def bare_log(level, chardata_or_fn, metadata \\ [])
+  def bare_log(level, chardata_or_fun, metadata \\ [])
       when level in @levels and is_list(metadata) do
     case __metadata__() do
       {true, pdict} ->
@@ -483,8 +489,9 @@ defmodule Logger do
           level: min_level, utc_log: utc_log?} = Logger.Config.__data__
 
         if compare_levels(level, min_level) != :lt do
-          truncated = truncate(chardata_or_fn, truncate)
           metadata = [pid: self()] ++ Keyword.merge(pdict, metadata)
+          {message, metadata} = normalize_message(chardata_or_fun, metadata)
+          truncated = truncate(message, truncate)
 
           tuple = {Logger, truncated, Logger.Utils.timestamp(utc_log?), metadata}
 
@@ -513,10 +520,11 @@ defmodule Logger do
 
       Logger.warn "knob turned too far to the right"
       Logger.warn fn -> "expensive to calculate warning" end
+      Logger.warn fn -> {"expensive to calculate warning", [additional: :metadata]} end
 
   """
-  defmacro warn(chardata_or_fn, metadata \\ []) do
-    maybe_log(:warn, chardata_or_fn, metadata, __CALLER__)
+  defmacro warn(chardata_or_fun, metadata \\ []) do
+    maybe_log(:warn, chardata_or_fun, metadata, __CALLER__)
   end
 
   @doc """
@@ -528,10 +536,11 @@ defmodule Logger do
 
       Logger.info "mission accomplished"
       Logger.info fn -> "expensive to calculate info" end
+      Logger.info fn -> {"expensive to calculate info", [additional: :metadata]} end
 
   """
-  defmacro info(chardata_or_fn, metadata \\ []) do
-    maybe_log(:info, chardata_or_fn, metadata, __CALLER__)
+  defmacro info(chardata_or_fun, metadata \\ []) do
+    maybe_log(:info, chardata_or_fun, metadata, __CALLER__)
   end
 
   @doc """
@@ -543,10 +552,11 @@ defmodule Logger do
 
       Logger.error "oops"
       Logger.error fn -> "expensive to calculate error" end
+      Logger.error fn -> {"expensive to calculate error", [additional: :metadata]} end
 
   """
-  defmacro error(chardata_or_fn, metadata \\ []) do
-    maybe_log(:error, chardata_or_fn, metadata, __CALLER__)
+  defmacro error(chardata_or_fun, metadata \\ []) do
+    maybe_log(:error, chardata_or_fun, metadata, __CALLER__)
   end
 
   @doc """
@@ -558,10 +568,11 @@ defmodule Logger do
 
       Logger.debug "hello?"
       Logger.debug fn -> "expensive to calculate debug" end
+      Logger.debug fn -> {"expensive to calculate debug", [additional: :metadata]} end
 
   """
-  defmacro debug(chardata_or_fn, metadata \\ []) do
-    maybe_log(:debug, chardata_or_fn, metadata, __CALLER__)
+  defmacro debug(chardata_or_fun, metadata \\ []) do
+    maybe_log(:debug, chardata_or_fun, metadata, __CALLER__)
   end
 
   @doc """
@@ -574,8 +585,8 @@ defmodule Logger do
   of this macro as they can automatically eliminate
   the Logger call altogether at compile time if desired.
   """
-  defmacro log(level, chardata_or_fn, metadata \\ []) do
-    macro_log(level, chardata_or_fn, metadata, __CALLER__)
+  defmacro log(level, chardata_or_fun, metadata \\ []) do
+    macro_log(level, chardata_or_fun, metadata, __CALLER__)
   end
 
   defp macro_log(level, data, metadata, caller) do
@@ -607,8 +618,13 @@ defmodule Logger do
     end
   end
 
-  defp truncate(data, n) when is_function(data, 0),
-    do: truncate(data.(), n)
+  defp normalize_message(fun, metadata) when is_function(fun, 0),
+    do: normalize_message(fun.(), metadata)
+  defp normalize_message({message, fun_metadata}, metadata) when is_list(fun_metadata),
+    do: {message, Keyword.merge(metadata, fun_metadata)}
+  defp normalize_message(message, metadata),
+    do: {message, metadata}
+
   defp truncate(data, n) when is_list(data) or is_binary(data),
     do: Logger.Utils.truncate(data, n)
   defp truncate(data, n),
@@ -620,8 +636,8 @@ defmodule Logger do
 
   defp form_fa(nil), do: nil
 
-  defp notify(:sync, msg),  do: GenEvent.sync_notify(Logger, msg)
-  defp notify(:async, msg), do: GenEvent.notify(Logger, msg)
+  defp notify(:sync, msg),  do: :gen_event.sync_notify(Logger, msg)
+  defp notify(:async, msg), do: :gen_event.notify(Logger, msg)
 
   defp handle_unused_variable_warnings(data, caller) do
     # We collect all the names of variables (leaving `data` unchanged) with a

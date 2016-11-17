@@ -10,15 +10,15 @@ defmodule Mix.Tasks.Compile do
 
   ## Configuration
 
-    * `:compilers` - compilers to run, defaults to:
-      `[:yecc, :leex, :erlang, :elixir, :xref, :app]`
+    * `:compilers` - compilers to run, defaults to `Mix.compilers/0`,
+      which are `[:yecc, :leex, :erlang, :elixir, :xref, :app]`.
 
     * `:consolidate_protocols` - when `true`, runs protocol
       consolidation via the `compile.protocols` task. The default
       value is `true`.
 
-    * `:build_embedded` - when `true`, activates protocol
-      consolidation and does not generate symlinks in builds
+    * `:build_embedded` - when `true`, does not generate symlinks in
+      builds. Defaults to `false`.
 
     * `:build_path` - the directory where build artifacts
       should be written to. This option is intended only for
@@ -42,10 +42,10 @@ defmodule Mix.Tasks.Compile do
 
   ## Command line options
 
-    * `--list`              - list all enabled compilers
-    * `--no-archives-check` - skip checking of archives
-    * `--no-deps-check`     - skip checking of dependencies
-    * `--force`             - force compilation
+    * `--list`              - lists all enabled compilers
+    * `--no-archives-check` - skips checking of archives
+    * `--no-deps-check`     - skips checking of dependencies
+    * `--force`             - forces compilation
 
   """
   @spec run(OptionParser.argv) :: :ok | :noop

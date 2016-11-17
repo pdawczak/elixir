@@ -53,8 +53,8 @@ defmodule GenServer do
   while **cast** messages do not.
 
   Every time you do a `GenServer.call/3`, the client will send a message
-  that must be handled by the `handle_call/3` callback in the GenServer.
-  A `cast/2` message must be handled by `handle_cast/2`.
+  that must be handled by the `c:handle_call/3` callback in the GenServer.
+  A `cast/2` message must be handled by `c:handle_cast/2`.
 
   ## Callbacks
 
@@ -79,10 +79,12 @@ defmodule GenServer do
       mechanism and name. The `:via` option expects a module that exports
       `register_name/2`, `unregister_name/1`, `whereis_name/1` and `send/2`.
       One such example is the `:global` module which uses these functions
-      for keeping the list of names of processes and their  associated PIDs
-      that are available globally for a network of Erlang nodes.
+      for keeping the list of names of processes and their associated PIDs
+      that are available globally for a network of Elixir nodes. Elixir also
+      ships with a local, decentralized and scalable registry called `Registry`
+      for locally storing names that are generated dynamically.
 
-  For example, we could start and register our Stack server locally as follows:
+  For example, we could start and register our `Stack` server locally as follows:
 
       # Start the server and register it locally with name MyStack
       {:ok, _} = GenServer.start_link(Stack, [:hello], name: MyStack)
@@ -100,6 +102,11 @@ defmodule GenServer do
     * `{:global, term}` if the server is globally registered
     * `{:via, module, name}` if the server is registered through an alternative
       registry
+
+  If there is an interest to register dynamic names locally, do not use
+  atoms, as atoms are never garbage collected and therefore dynamically
+  generated atoms won't be garbage collected. For such cases, you can
+  set up your own local registry by using the `Registry` module.
 
   ## Client / Server APIs
 
@@ -160,12 +167,12 @@ defmodule GenServer do
 
   Besides the synchronous and asynchronous communication provided by `call/3`
   and `cast/2`, "regular" messages sent by functions such `Kernel.send/2`,
-  `Process.send_after/3` and similar, can be handled inside the `handle_info/2`
+  `Process.send_after/4` and similar, can be handled inside the `c:handle_info/2`
   callback.
 
-  `handle_info/2` can be used in many situations, such as handling monitor
-  DOWN messages sent by `Process.monitor/2`. Another use case for `handle_info/2`
-  is to perform periodic work, with the help of `Process.send_after/3`:
+  `c:handle_info/2` can be used in many situations, such as handling monitor
+  DOWN messages sent by `Process.monitor/1`. Another use case for `c:handle_info/2`
+  is to perform periodic work, with the help of `Process.send_after/4`:
 
       defmodule MyApp.Periodically do
         use GenServer
@@ -268,7 +275,7 @@ defmodule GenServer do
   """
 
   @doc """
-  Invoked when the server is started. `start_link/3` (or `start/3`) will
+  Invoked when the server is started. `start_link/3` or `start/3` will
   block until it returns.
 
   `args` is the argument term (second argument) passed to `start_link/3`.
@@ -282,10 +289,10 @@ defmodule GenServer do
 
   Returning `{:ok, state, :hibernate}` is similar to
   `{:ok, state}` except the process is hibernated before entering the loop. See
-  `handle_call/3` for more information on hibernation.
+  `c:handle_call/3` for more information on hibernation.
 
   Returning `:ignore` will cause `start_link/3` to return `:ignore` and the
-  process will exit normally without entering the loop or calling `terminate/2`.
+  process will exit normally without entering the loop or calling `c:terminate/2`.
   If used when part of a supervision tree the parent supervisor will not fail
   to start nor immediately try to restart the `GenServer`. The remainder of the
   supervision tree will be (re)started and so the `GenServer` should not be
@@ -300,7 +307,7 @@ defmodule GenServer do
 
   Returning `{:stop, reason}` will cause `start_link/3` to return
   `{:error, reason}` and the process to exit with reason `reason` without
-  entering the loop or calling `terminate/2`.
+  entering the loop or calling `c:terminate/2`.
   """
   @callback init(args :: term) ::
     {:ok, state} |
@@ -355,7 +362,7 @@ defmodule GenServer do
   `{:noreply, new_state}` except a timeout or hibernation occurs as with a
   `:reply` tuple.
 
-  Returning `{:stop, reason, reply, new_state}` stops the loop and `terminate/2`
+  Returning `{:stop, reason, reply, new_state}` stops the loop and `c:terminate/2`
   is called with reason `reason` and state `new_state`. Then the `reply` is sent
   as the response to call and the process exits with reason `reason`.
 
@@ -387,9 +394,9 @@ defmodule GenServer do
 
   Returning `{:noreply, new_state, :hibernate}` is similar to
   `{:noreply, new_state}` except the process is hibernated before continuing the
-  loop. See `handle_call/3` for more information.
+  loop. See `c:handle_call/3` for more information.
 
-  Returning `{:stop, reason, new_state}` stops the loop and `terminate/2` is
+  Returning `{:stop, reason, new_state}` stops the loop and `c:terminate/2` is
   called with the reason `reason` and state `new_state`. The process exits with
   reason `reason`.
 
@@ -407,7 +414,7 @@ defmodule GenServer do
   `msg` is the message and `state` is the current state of the `GenServer`. When
   a timeout occurs the message is `:timeout`.
 
-  Return values are the same as `handle_cast/2`.
+  Return values are the same as `c:handle_cast/2`.
 
   If this callback is not implemented, the default implementation by
   `use GenServer` will return `{:noreply, state}`.
@@ -423,7 +430,7 @@ defmodule GenServer do
   `reason` is exit reason and `state` is the current state of the `GenServer`.
   The return value is ignored.
 
-  `terminate/2` is called if a callback (except `init/1`) returns a `:stop`
+  `c:terminate/2` is called if a callback (except `c:init/1`) returns a `:stop`
   tuple, raises, calls `Kernel.exit/1` or returns an invalid value. It may also
   be called if the `GenServer` traps exits using `Process.flag/2` *and* the
   parent process sends an exit signal.
@@ -431,23 +438,23 @@ defmodule GenServer do
   If part of a supervision tree a `GenServer`'s `Supervisor` will send an exit
   signal when shutting it down. The exit signal is based on the shutdown
   strategy in the child's specification. If it is `:brutal_kill` the `GenServer`
-  is killed and so `terminate/2` is not called. However if it is a timeout the
+  is killed and so `c:terminate/2` is not called. However if it is a timeout the
   `Supervisor` will send the exit signal `:shutdown` and the `GenServer` will
-  have the duration of the timeout to call `terminate/2` - if the process is
+  have the duration of the timeout to call `c:terminate/2` - if the process is
   still alive after the timeout it is killed.
 
   If the `GenServer` receives an exit signal (that is not `:normal`) from any
   process when it is not trapping exits it will exit abruptly with the same
-  reason and so not call `terminate/2`. Note that a process does *NOT* trap
+  reason and so not call `c:terminate/2`. Note that a process does *NOT* trap
   exits by default and an exit signal is sent when a linked process exits or its
   node is disconnected.
 
-  Therefore it is not guaranteed that `terminate/2` is called when a `GenServer`
+  Therefore it is not guaranteed that `c:terminate/2` is called when a `GenServer`
   exits. For such reasons, we usually recommend important clean-up rules to
   happen in separated processes either by use of monitoring or by links
   themselves. For example if the `GenServer` controls a `port` (e.g.
-  `:gen_tcp.socket`) or `File.io_device`, they will be closed on receiving a
-  `GenServer`'s exit signal and do not need to be closed in `terminate/2`.
+  `:gen_tcp.socket`) or `t:File.io_device/0`, they will be closed on receiving a
+  `GenServer`'s exit signal and do not need to be closed in `c:terminate/2`.
 
   If `reason` is not `:normal`, `:shutdown` nor `{:shutdown, term}` an error is
   logged.
@@ -471,7 +478,7 @@ defmodule GenServer do
   Returning `{:error, reason}` fails the code change with reason `reason` and
   the state remains as the previous state.
 
-  If `code_change/3` raises the code change fails and the loop will continue
+  If `c:code_change/3` raises the code change fails and the loop will continue
   with its previous state. Therefore this callback does not usually contain side effects.
   """
   @callback code_change(old_vsn, state :: term, extra :: term) ::
@@ -483,7 +490,7 @@ defmodule GenServer do
 
   This callback can be useful to control the *appearance* of the status of the
   `GenServer`. For example, it can be used to return a compact representation of
-  the `GenServers`'s state to avoid having large state terms printed.
+  the `GenServer`'s state to avoid having large state terms printed.
 
     * one of `:sys.get_status/1` or `:sys.get_status/2` is invoked to get the
       status of the `GenServer`; in such cases, `reason` is `:normal`
@@ -550,7 +557,14 @@ defmodule GenServer do
       end
 
       @doc false
-      def handle_info(_msg, state) do
+      def handle_info(msg, state) do
+        proc =
+          case Process.info(self(), :registered_name) do
+            {_, []}   -> self()
+            {_, name} -> name
+          end
+        :error_logger.error_msg('~p ~p received unexpected message in handle_info/2: ~p~n',
+                                [__MODULE__, proc, msg])
         {:noreply, state}
       end
 
@@ -584,15 +598,15 @@ defmodule GenServer do
 
   This is often used to start the `GenServer` as part of a supervision tree.
 
-  Once the server is started, the `init/1` function of the given `module` is
+  Once the server is started, the `c:init/1` function of the given `module` is
   called with `args` as its arguments to initialize the server. To ensure a
-  synchronized start-up procedure, this function does not return until `init/1`
+  synchronized start-up procedure, this function does not return until `c:init/1`
   has returned.
 
   Note that a `GenServer` started with `start_link/3` is linked to the
   parent process and will exit in case of crashes from the parent. The GenServer
   will also exit due to the `:normal` reasons in case it is configured to trap
-  exits in the `init/1` callback.
+  exits in the `c:init/1` callback.
 
   ## Options
 
@@ -616,7 +630,7 @@ defmodule GenServer do
   specified server name already exists, this function returns
   `{:error, {:already_started, pid}}` with the PID of that process.
 
-  If the `init/1` callback fails with `reason`, this function returns
+  If the `c:init/1` callback fails with `reason`, this function returns
   `{:error, reason}`. Otherwise, if it returns `{:stop, reason}`
   or `:ignore`, the process is terminated and this function returns
   `{:error, reason}` or `:ignore`, respectively.
@@ -663,7 +677,7 @@ defmodule GenServer do
   @doc """
   Stops the server with the given `reason`.
 
-  The `terminate/2` callback of the given `server` will be invoked before
+  The `c:terminate/2` callback of the given `server` will be invoked before
   exiting. This function returns `:ok` if the server terminates with the
   given reason; if it terminates with another reason, the call exits.
 
@@ -680,7 +694,7 @@ defmodule GenServer do
   Makes a synchronous call to the `server` and waits for its reply.
 
   The client sends the given `request` to the server and waits until a reply
-  arrives or a timeout occurs. `handle_call/3` will be called on the server
+  arrives or a timeout occurs. `c:handle_call/3` will be called on the server
   to handle the request.
 
   `server` can be any of the values described in the "Name registration"
@@ -725,7 +739,7 @@ defmodule GenServer do
   is unknown whether the destination `server` successfully
   handled the message.
 
-  `handle_cast/2` will be called on the server to handle
+  `c:handle_cast/2` will be called on the server to handle
   the request. In case the `server` is on a node which is
   not yet connected to the caller one, the call is going to
   block until a connection happens. This is different than
@@ -769,7 +783,7 @@ defmodule GenServer do
   See `multi_call/4` for more information.
   """
   @spec abcast([node], name :: atom, term) :: :abcast
-  def abcast(nodes \\ nodes(), name, request) when is_list(nodes) and is_atom(name) do
+  def abcast(nodes \\ [node() | Node.list()], name, request) when is_list(nodes) and is_atom(name) do
     msg = cast_msg(request)
     _   = for node <- nodes, do: do_send({name, node}, msg)
     :abcast
@@ -819,7 +833,7 @@ defmodule GenServer do
   """
   @spec multi_call([node], name :: atom, term, timeout) ::
                   {replies :: [{node, term}], bad_nodes :: [node]}
-  def multi_call(nodes \\ nodes(), name, request, timeout \\ :infinity) do
+  def multi_call(nodes \\ [node() | Node.list()], name, request, timeout \\ :infinity) do
     :gen_server.multi_call(nodes, name, request, timeout)
   end
 
@@ -828,10 +842,10 @@ defmodule GenServer do
 
   This function can be used to explicitly send a reply to a client that called
   `call/3` or `multi_call/4` when the reply cannot be specified in the return
-  value of `handle_call/3`.
+  value of `c:handle_call/3`.
 
   `client` must be the `from` argument (the second argument) accepted by
-  `handle_call/3` callbacks. `reply` is an arbitrary term which will be given
+  `c:handle_call/3` callbacks. `reply` is an arbitrary term which will be given
   back to the client as the return value of the call.
 
   Note that `reply/2` can be called from any process, not just the GenServer
@@ -849,6 +863,7 @@ defmodule GenServer do
 
       def handle_info({:reply, from}, state) do
         GenServer.reply(from, :one_second_has_passed)
+        {:noreply, state}
       end
 
   """
@@ -899,11 +914,5 @@ defmodule GenServer do
   end
   def whereis({name, node} = server) when is_atom(name) and is_atom(node) do
     server
-  end
-
-  @compile {:inline, [nodes: 0]}
-
-  defp nodes do
-    [node() | :erlang.nodes()]
   end
 end

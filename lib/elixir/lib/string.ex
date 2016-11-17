@@ -105,8 +105,8 @@ defmodule String do
 
   While this is much better (we don't traverse `full` twice),
   it could still be improved. In this case, since we want to
-  extract a substring from a string, we can use `byte_size/1`
-  and `binary_part/3` as there is no chance we will slice in
+  extract a substring from a string, we can use `Kernel.byte_size/1`
+  and `Kernel.binary_part/3` as there is no chance we will slice in
   the middle of a codepoint made of more than one byte:
 
       iex> take_prefix = fn full, prefix ->
@@ -174,7 +174,7 @@ defmodule String do
   In other words, this module expects invalid data to be detected
   elsewhere, usually when retrieving data from the external source.
   For example, a driver that reads strings from a database will be
-  responsible to check the validity of the encoding. `String.chunk/1`
+  responsible to check the validity of the encoding. `String.chunk/2`
   can be used for breaking a string into valid and invalid parts.
 
   ## Patterns
@@ -217,23 +217,27 @@ defmodule String do
   @spec printable?(t) :: boolean
   def printable?(string)
 
-  def printable?(<<h::utf8, t::binary>>)
-      when h in 0x20..0x7E
-      when h in 0xA0..0xD7FF
-      when h in 0xE000..0xFFFD
-      when h in 0x10000..0x10FFFF do
-    printable?(t)
+  for char <- 0x20..0x7E do
+    def printable?(<<unquote(char), rest::binary>>) do
+      printable?(rest)
+    end
   end
+  def printable?(<<?\n, rest::binary>>), do: printable?(rest)
+  def printable?(<<?\r, rest::binary>>), do: printable?(rest)
+  def printable?(<<?\t, rest::binary>>), do: printable?(rest)
+  def printable?(<<?\v, rest::binary>>), do: printable?(rest)
+  def printable?(<<?\b, rest::binary>>), do: printable?(rest)
+  def printable?(<<?\f, rest::binary>>), do: printable?(rest)
+  def printable?(<<?\e, rest::binary>>), do: printable?(rest)
+  def printable?(<<?\d, rest::binary>>), do: printable?(rest)
+  def printable?(<<?\a, rest::binary>>), do: printable?(rest)
 
-  def printable?(<<?\n, t::binary>>), do: printable?(t)
-  def printable?(<<?\r, t::binary>>), do: printable?(t)
-  def printable?(<<?\t, t::binary>>), do: printable?(t)
-  def printable?(<<?\v, t::binary>>), do: printable?(t)
-  def printable?(<<?\b, t::binary>>), do: printable?(t)
-  def printable?(<<?\f, t::binary>>), do: printable?(t)
-  def printable?(<<?\e, t::binary>>), do: printable?(t)
-  def printable?(<<?\d, t::binary>>), do: printable?(t)
-  def printable?(<<?\a, t::binary>>), do: printable?(t)
+  def printable?(<<char::utf8, rest::binary>>)
+      when char in 0xA0..0xD7FF
+      when char in 0xE000..0xFFFD
+      when char in 0x10000..0x10FFFF do
+    printable?(rest)
+  end
 
   def printable?(<<>>), do: true
   def printable?(binary) when is_binary(binary), do: false
@@ -276,6 +280,10 @@ defmodule String do
   Empty strings are only removed from the result if the
   `trim` option is set to `true` (default is `false`).
 
+  When the pattern used is a regular expression, the string is
+  split using `Regex.split/3`. In that case this function accepts
+  additional options which are documented in `Regex.split/3`.
+
   ## Examples
 
   Splitting with a string pattern:
@@ -303,6 +311,9 @@ defmodule String do
       ["a", "b,c"]
 
       iex> String.split(" a b c ", ~r{\s}, trim: true)
+      ["a", "b", "c"]
+
+      iex> String.split("abc", ~r{b}, include_captures: true)
       ["a", "b", "c"]
 
   Splitting on empty patterns returns graphemes:
@@ -374,14 +385,14 @@ defmodule String do
 
   ## Examples
 
-    iex> String.splitter("1,2 3,4 5,6 7,8,...,99999", [" ", ","]) |> Enum.take(4)
-    ["1", "2", "3", "4"]
+      iex> String.splitter("1,2 3,4 5,6 7,8,...,99999", [" ", ","]) |> Enum.take(4)
+      ["1", "2", "3", "4"]
 
-    iex> String.splitter("abcd", "") |> Enum.take(10)
-    ["a", "b", "c", "d", ""]
+      iex> String.splitter("abcd", "") |> Enum.take(10)
+      ["a", "b", "c", "d", ""]
 
-    iex> String.splitter("abcd", "", trim: true) |> Enum.take(10)
-    ["a", "b", "c", "d"]
+      iex> String.splitter("abcd", "", trim: true) |> Enum.take(10)
+      ["a", "b", "c", "d"]
 
   """
   @spec splitter(t, pattern, Keyword.t) :: Enumerable.t
@@ -1053,7 +1064,7 @@ defmodule String do
   string.
 
   When the pattern is a string, a developer can use the replaced part inside
-  the `replacement` by using the `:insert_replace` option and specifying the
+  the `replacement` by using the `:insert_replaced` option and specifying the
   position(s) inside the `replacement` where the string pattern will be
   inserted:
 
@@ -1066,7 +1077,7 @@ defmodule String do
       iex> String.replace("a,b,c", ",", "[]", insert_replaced: [1, 1])
       "a[,,]b[,,]c"
 
-  If any position given in the `:insert_replace` option is larger than the
+  If any position given in the `:insert_replaced` option is larger than the
   replacement string, or is negative, an `ArgumentError` is raised.
   """
   @spec replace(t, pattern | Regex.t, t, Keyword.t) :: t
@@ -1369,7 +1380,7 @@ defmodule String do
   defdelegate next_grapheme_size(string), to: String.Unicode
 
   @doc """
-  Returns the first grapheme from a utf8 string,
+  Returns the first grapheme from a UTF-8 string,
   `nil` if the string is empty.
 
   ## Examples
@@ -1390,7 +1401,7 @@ defmodule String do
   end
 
   @doc """
-  Returns the last grapheme from a utf8 string,
+  Returns the last grapheme from a UTF-8 string,
   `nil` if the string is empty.
 
   ## Examples
@@ -1414,7 +1425,7 @@ defmodule String do
   defp do_last(nil, last_char), do: last_char
 
   @doc """
-  Returns the number of Unicode graphemes in a utf8 string.
+  Returns the number of Unicode graphemes in a UTF-8 string.
 
   ## Examples
 
@@ -1429,7 +1440,7 @@ defmodule String do
   defdelegate length(string), to: String.Unicode
 
   @doc """
-  Returns the grapheme at the `position` of the given utf8 `string`.
+  Returns the grapheme at the `position` of the given UTF-8 `string`.
   If `position` is greater than `string` length, then it returns `nil`.
 
   ## Examples
@@ -1988,8 +1999,7 @@ defmodule String do
   @doc """
   Returns a keyword list that represents an edit script.
 
-  The algorithm is outlined in the
-  "An O(ND) Difference Algorithm and Its Variations" paper by E. Myers.
+  Check `List.myers_difference/2` for more information.
 
   ## Examples
 
@@ -2000,90 +2010,11 @@ defmodule String do
 
   """
   @spec myers_difference(t, t) :: [{:eq | :ins | :del, t}] | nil
-  def myers_difference(str1, str2) do
-    {chars1, len1} = chars_and_length(str1)
-    {chars2, len2} = chars_and_length(str2)
-
-    path = {0, 0, chars1, chars2, []}
-    find_script(0, len1 + len2, [path])
-  end
-
-  defp find_script(envelope, max, _paths) when envelope > max do
-    nil
-  end
-
-  defp find_script(envelope, max, paths) do
-    case each_diagonal(-envelope, envelope, paths, []) do
-      {:done, edits} -> compact_reverse(edits, [])
-      {:next, paths} -> find_script(envelope + 1, max, paths)
-    end
-  end
-
-  defp compact_reverse([], acc), do: acc
-
-  defp compact_reverse([{kind, char} | rest], [{kind, chars} | acc]) do
-    compact_reverse(rest, [{kind, char <> chars} | acc])
-  end
-
-  defp compact_reverse([elem | rest], acc) do
-    compact_reverse(rest, [elem | acc])
-  end
-
-  defp each_diagonal(diag, limit, _paths, next_paths) when diag > limit do
-    {:next, Enum.reverse(next_paths)}
-  end
-
-  defp each_diagonal(diag, limit, paths, next_paths) do
-    {path, rest} = proceed_path(diag, limit, paths)
-    with {:cont, path} <- follow_snake(path) do
-      each_diagonal(diag + 2, limit, rest, [path | next_paths])
-    end
-  end
-
-  defp proceed_path(0, 0, [path]), do: {path, []}
-
-  defp proceed_path(diag, limit, [path | _] = paths) when diag == -limit do
-    {move_down(path), paths}
-  end
-
-  defp proceed_path(diag, limit, [path]) when diag == limit do
-    {move_right(path), []}
-  end
-
-  defp proceed_path(_diag, _limit, [path1, path2 | rest]) do
-    if elem(path1, 1) > elem(path2, 1) do
-      {move_right(path1), [path2 | rest]}
-    else
-      {move_down(path2), [path2 | rest]}
-    end
-  end
-
-  defp move_right({x, y, chars1, [char | rest], edits}) do
-    {x + 1, y, chars1, rest, [{:ins, char} | edits]}
-  end
-
-  defp move_right({x, y, chars1, [], edits}) do
-    {x + 1, y, chars1, [], edits}
-  end
-
-  defp move_down({x, y, [char | rest], chars2, edits}) do
-    {x, y + 1, rest, chars2, [{:del, char} | edits]}
-  end
-
-  defp move_down({x, y, [], chars2, edits}) do
-    {x, y + 1, [], chars2, edits}
-  end
-
-  defp follow_snake({x, y, [char | rest1], [char | rest2], edits}) do
-    follow_snake({x + 1, y + 1, rest1, rest2, [{:eq, char} | edits]})
-  end
-
-  defp follow_snake({_x, _y, [], [], edits}) do
-    {:done, edits}
-  end
-
-  defp follow_snake(path) do
-    {:cont, path}
+  def myers_difference(string1, string2) do
+    List.myers_difference(graphemes(string1), graphemes(string2))
+    |> Enum.map(fn {kind, chars} ->
+      {kind, IO.iodata_to_binary(chars)}
+    end)
   end
 
   # TODO: Deprecate by v1.5

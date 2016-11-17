@@ -59,10 +59,30 @@ defmodule LoggerTest do
 
   test "add_backend/1 with {module, id}" do
     defmodule MyBackend do
-      use GenEvent
+      @behaviour :gen_event
 
       def init({MyBackend, :hello}) do
         {:ok, :hello}
+      end
+
+      def handle_event(_event, state) do
+        {:ok, state}
+      end
+
+      def handle_call(:error, _) do
+        raise "oops"
+      end
+
+      def handle_info(_msg, state) do
+        {:ok, state}
+      end
+
+      def code_change(_old_vsn, state, _extra) do
+        {:ok, state}
+      end
+
+      def terminate(_reason, _state) do
+        :ok
       end
     end
 
@@ -100,6 +120,14 @@ defmodule LoggerTest do
     assert capture_log(fn ->
       assert Logger.bare_log(:info, "ok", [application: nil, module: LoggerTest]) == :ok
     end) =~ msg("application= module=LoggerTest [info]  ok")
+  end
+
+  test "metadata merge when the argument function returns metadata" do
+    assert Logger.metadata([module: Sample]) == :ok
+
+    assert capture_log(fn ->
+      assert Logger.bare_log(:info, fn -> {"ok", [module: "Function"]} end, [application: nil, module: LoggerTest]) == :ok
+    end) =~ msg("application= module=Function [info]  ok")
   end
 
   test "enable/1 and disable/1" do

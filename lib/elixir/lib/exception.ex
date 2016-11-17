@@ -7,7 +7,7 @@ defmodule Exception do
   `System.stacktrace/0` will return the stacktrace for the
   last throw/error/exit that occurred in the current process.
 
-  Do not rely on the particular format returned by the `format`
+  Do not rely on the particular format returned by the `format*`
   functions in this module. They may be changed in future releases
   in order to better suit Elixir's tool chain. In other words,
   by using the functions in this module it is guaranteed you will
@@ -786,9 +786,16 @@ end
 defmodule File.Error do
   defexception [:reason, :path, action: ""]
 
-  def message(exception) do
-    formatted = IO.iodata_to_binary(:file.format_error(exception.reason))
-    "could not #{exception.action} #{inspect(exception.path)}: #{formatted}"
+  def message(%{action: action, reason: reason, path: path}) do
+    formatted =
+      case {action, reason} do
+        {"remove directory", :eexist} ->
+          "directory is not empty"
+        _ ->
+          IO.iodata_to_binary(:file.format_error(reason))
+      end
+
+    "could not #{action} #{inspect(path)}: #{formatted}"
   end
 end
 

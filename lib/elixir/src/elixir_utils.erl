@@ -139,7 +139,7 @@ elixir_to_erl(<<>>) ->
   {bin, 0, []};
 
 elixir_to_erl(Tree) when is_list(Tree) ->
-  elixir_to_erl_cons_1(Tree, []);
+  elixir_to_erl_cons1(Tree, []);
 
 elixir_to_erl(Tree) when is_atom(Tree) ->
   {atom, 0, Tree};
@@ -151,7 +151,7 @@ elixir_to_erl(Tree) when is_float(Tree) ->
   {float, 0, Tree};
 
 elixir_to_erl(Tree) when is_binary(Tree) ->
-  %% Note that our binaries are utf-8 encoded and we are converting
+  %% Note that our binaries are UTF-8 encoded and we are converting
   %% to a list using binary_to_list. The reason for this is that Erlang
   %% considers a string in a binary to be encoded in latin1, so the bytes
   %% are not changed in any fashion.
@@ -180,12 +180,12 @@ elixir_to_erl(Pid) when is_pid(Pid) ->
 elixir_to_erl(_Other) ->
   error(badarg).
 
-elixir_to_erl_cons_1([H | T], Acc) -> elixir_to_erl_cons_1(T, [H | Acc]);
-elixir_to_erl_cons_1(Other, Acc) -> elixir_to_erl_cons_2(Acc, elixir_to_erl(Other)).
+elixir_to_erl_cons1([H | T], Acc) -> elixir_to_erl_cons1(T, [H | Acc]);
+elixir_to_erl_cons1(Other, Acc) -> elixir_to_erl_cons2(Acc, elixir_to_erl(Other)).
 
-elixir_to_erl_cons_2([H | T], Acc) ->
-  elixir_to_erl_cons_2(T, {cons, 0, elixir_to_erl(H), Acc});
-elixir_to_erl_cons_2([], Acc) ->
+elixir_to_erl_cons2([H | T], Acc) ->
+  elixir_to_erl_cons2(T, {cons, 0, elixir_to_erl(H), Acc});
+elixir_to_erl_cons2([], Acc) ->
   Acc.
 
 %% Boolean checks
@@ -199,20 +199,21 @@ returns_boolean({{'.', _, [erlang, Op]}, _, [_, _]}) when
   Op == '==';  Op == '/='; Op == '=<';  Op == '>=';
   Op == '<';   Op == '>';  Op == '=:='; Op == '=/=' -> true;
 
-returns_boolean({'__op__', _, [Op, _, Right]}) when Op == 'andalso'; Op == 'orelse' ->
+returns_boolean({{'.', _, [erlang, Op]}, _, [_, Right]}) when
+  Op == 'andalso'; Op == 'orelse' ->
   returns_boolean(Right);
 
 returns_boolean({{'.', _, [erlang, Fun]}, _, [_]}) when
   Fun == is_atom;   Fun == is_binary;   Fun == is_bitstring; Fun == is_boolean;
   Fun == is_float;  Fun == is_function; Fun == is_integer;   Fun == is_list;
   Fun == is_number; Fun == is_pid;      Fun == is_port;      Fun == is_reference;
-  Fun == is_tuple -> true;
+  Fun == is_tuple;  Fun == is_map;      Fun == is_process_alive -> true;
 
 returns_boolean({{'.', _, [erlang, Fun]}, _, [_, _]}) when
-  Fun == is_function -> true;
+  Fun == is_function; Fun == is_record -> true;
 
 returns_boolean({{'.', _, [erlang, Fun]}, _, [_, _, _]}) when
-  Fun == function_exported -> true;
+  Fun == function_exported; Fun == is_record -> true;
 
 returns_boolean({'case', _, [_, [{do, Clauses}]]}) ->
   lists:all(fun

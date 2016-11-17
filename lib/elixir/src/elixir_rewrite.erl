@@ -95,7 +95,6 @@ inline(?kernel, max, 2) -> {erlang, max};
 inline(?kernel, min, 2) -> {erlang, min};
 inline(?kernel, node, 0) -> {erlang, node};
 inline(?kernel, node, 1) -> {erlang, node};
-inline(?kernel, rand, 0) -> {rand, uniform};
 inline(?kernel, 'rem', 2) -> {erlang, 'rem'};
 inline(?kernel, round, 1) -> {erlang, round};
 inline(?kernel, self, 0) -> {erlang, self};
@@ -117,6 +116,8 @@ inline(?map, size, 1) -> {maps, size};
 inline(?map, values, 1) -> {maps, values};
 inline(?map, to_list, 1) -> {maps, to_list};
 
+inline(?node, list, 0) -> {erlang, nodes};
+inline(?node, list, 1) -> {erlang, nodes};
 inline(?node, spawn, 2) -> {erlang, spawn};
 inline(?node, spawn, 3) -> {erlang, spawn_opt};
 inline(?node, spawn, 4) -> {erlang, spawn};
@@ -140,12 +141,10 @@ inline(?process, spawn, 4) -> {erlang, spawn_opt};
 inline(?process, unlink, 1) -> {erlang, unlink};
 
 inline(?port, open, 2) -> {erlang, open_port};
-inline(?port, call, 3) -> {erlang, port_call};
 inline(?port, close, 1) -> {erlang, port_close};
 inline(?port, command, 2) -> {erlang, port_command};
 inline(?port, command, 3) -> {erlang, port_command};
 inline(?port, connect, 2) -> {erlang, port_connect};
-inline(?port, control, 3) -> {erlang, port_control};
 inline(?port, list, 0) -> {erlang, ports};
 
 inline(?string, to_float, 1) -> {erlang, binary_to_float};

@@ -74,35 +74,12 @@ defmodule KernelTest do
   end
 
   test "match?/2" do
-    assert match?(_, List.first(1)) == true
-    assert binding() == []
-
     a = List.first([0])
     assert match?(b when b > a, 1) == true
     assert binding() == [a: 0]
 
     assert match?(b when b > a, -1) == false
     assert binding() == [a: 0]
-  end
-
-  test "rand/0" do
-    x = rand()
-    assert is_float(x)
-    assert x >= 0.0
-    assert x <= 1.0
-
-    mod = Kernel
-    x = mod.rand()
-    assert is_float(x)
-    assert x >= 0.0
-    assert x <= 1.0
-  end
-
-  test "rand/1" do
-    n = rand(10..20)
-    assert is_integer(n)
-    assert n >= 10
-    assert n <= 20
   end
 
   test "in/2" do
@@ -119,14 +96,12 @@ defmodule KernelTest do
     assert 3 in [1 | list]
   end
 
-  @at_list1  [4, 5]
+  @at_list1 [4, 5]
   @at_range 6..8
   @at_list2 [13, 14]
-  @doc "fun_in/1"
-  "fun_in/1" = @doc
-  def fun_in(x) when x in [0],       do: :list
-  def fun_in(x) when x in 1..3,      do: :range
-  def fun_in(x) when x in @at_list1,  do: :at_list
+  def fun_in(x) when x in [0], do: :list
+  def fun_in(x) when x in 1..3, do: :range
+  def fun_in(x) when x in @at_list1, do: :at_list
   def fun_in(x) when x in @at_range, do: :at_range
   def fun_in(x) when x in [9 | [10, 11]], do: :list_cons
   def fun_in(x) when x in [12 | @at_list2], do: :list_cons_at
@@ -203,10 +178,24 @@ defmodule KernelTest do
   end
 
   test "in/2 in module body" do
-    defmodule In do
+    defmodule InSample do
       @foo [:a, :b]
       true = :a in @foo
     end
+  after
+    purge(InSample)
+  end
+
+  test "in/2 inside and/2" do
+    response = %{code: 200}
+    if is_map(response) and response.code in 200..299 do
+      :pass
+    end
+
+    # This module definition copies internal variable
+    # defined during in/2 expansion.
+    Module.create(InVarCopy, nil, __ENV__)
+    purge(InVarCopy)
   end
 
   test "in/2 with a non-literal non-escaped compile-time range in guards" do
@@ -253,20 +242,19 @@ defmodule KernelTest do
   end
 
   test "in/2 optimized" do
-    assert expand_to_string(quote(do: foo in [])) ==
-           "Enum.member?([], foo)"
+    assert expand_to_string(quote(do: foo in [])) == "Enum.member?([], foo)"
 
-    assert expand_to_string(quote(do: rand() in 1..2)) =~
-           "var = rand()"
-    assert expand_to_string(quote(do: rand() in 1..2)) =~
-           ~S[:erlang.andalso(:erlang.is_integer(var), :erlang.andalso(:erlang.>=(var, 1), :erlang.=<(var, 2)))]
+    result = expand_to_string(quote(do: rand() in 1..2))
+    assert result =~ "var = rand()"
+    assert result =~ ":erlang.andalso(:erlang.is_integer(var), :erlang.andalso(:erlang.>=(var, 1), :erlang.=<(var, 2)))"
 
-    assert expand_to_string(quote(do: rand() in [1, 2])) =~
-           "var = rand()"
-    assert expand_to_string(quote(do: rand() in [1, 2])) =~
-           ~S[:erlang.or(:erlang.=:=(var, 2), :erlang.=:=(var, 1))]
-    assert expand_to_string(quote(do: rand() in [1 | [2]])) =~
-           ~S[:erlang.or(:erlang.=:=(var, 1), :erlang.=:=(var, 2))]
+    result = expand_to_string(quote(do: rand() in [1, 2]))
+    assert result =~ "var = rand()"
+    assert result =~ ":erlang.or(:erlang.=:=(var, 2), :erlang.=:=(var, 1))"
+
+    result = expand_to_string(quote(do: rand() in [1 | [2]]))
+    assert result =~ "var = rand()"
+    assert result =~ ":erlang.or(:erlang.=:=(var, 1), :erlang.=:=(var, 2))"
   end
 
   defp expand_to_string(ast) do
@@ -284,10 +272,9 @@ defmodule KernelTest do
   test "paren as nil" do
     assert is_nil(()) == true
     assert (_ = (); ();) == nil
-    assert [ 1, (), 3 ] == [1, nil, 3 ]
+    assert [1, (), 3] == [1, nil, 3]
     assert [do: ()] == [do: nil]
     assert {1, (), 3} == {1, nil, 3}
-    assert (Kernel.&& nil, ()) == nil
     assert (Kernel.&& nil, ()) == nil
     assert (() && ()) == nil
     assert (if(() && ()) do
@@ -861,8 +848,12 @@ defmodule KernelTest do
           """, [], __ENV__)
       end) == "B\nA\n"
     after
-      :code.purge(UseMacro.TestMod)
-      :code.delete(UseMacro.TestMod)
+      KernelTest.purge(UseMacro.TestMod)
     end
+  end
+
+  def purge(module) do
+    :code.delete(module)
+    :code.purge(module)
   end
 end

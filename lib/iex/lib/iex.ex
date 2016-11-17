@@ -80,7 +80,7 @@ defmodule IEx do
       iex(foo@HOST)1>
 
   The string between the parentheses in the prompt is the name
-  of your node. We can retrieve it by calling the `node()`
+  of your node. We can retrieve it by calling the `node/0`
   function:
 
       iex(foo@HOST)1> node()
@@ -266,6 +266,22 @@ defmodule IEx do
     * `:doc_bold`        - (bright)
     * `:doc_underline`   - (underline)
 
+  IEx will also color inspected expressions using the `:syntax_colors`
+  option. Such can be disabled with:
+
+      IEx.configure [colors: [syntax_colors: false]]
+
+  You can also configure the syntax colors, however, as desired:
+
+      IEx.configure [colors: [syntax_colors: [atom: :red]]]
+
+  Configuration for most built-in data types are supported: `:atom`,
+  `:string`, `:binary`, `:list`, `:number`, `:boolean`, `:nil`, etc.
+  The default is:
+
+      [number: :magenta, atom: :cyan, string: :green,
+       boolean: :magenta, nil: :magenta]
+
   ## Inspect
 
   A keyword list containing inspect options used by the shell
@@ -435,7 +451,7 @@ defmodule IEx do
 
   You can invoke this function directly when you are not able to invoke
   `IEx.pry/1` as a macro. This function expects the binding (from
-  `Kernel.binding/0`), the environment (from `__ENV__`) and the timeout
+  `Kernel.binding/0`), the environment (from `__ENV__/0`) and the timeout
   (a sensible default is 5000).
   """
   def pry(binding, env, timeout) do

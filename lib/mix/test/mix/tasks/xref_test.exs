@@ -87,7 +87,7 @@ defmodule Mix.Tasks.XrefTest do
     """
   end
 
-  test "warnings: protocols are checked, ignoring missing builtin impls" do
+  test "warnings: protocols are checked, ignoring missing built-in impls" do
     assert_warnings """
     defprotocol AProtocol do
       def func(arg)
@@ -451,7 +451,7 @@ defmodule Mix.Tasks.XrefTest do
 
   test "callers: no argument gives error" do
     in_fixture "no_mixfile", fn ->
-      message = "xref doesn't support this command, see mix help xref for more information"
+      message = "xref doesn't support this command, see \"mix help xref\" for more information"
 
       assert_raise Mix.Error, message, fn ->
         assert Mix.Task.run("xref", ["callers"]) == :error

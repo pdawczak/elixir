@@ -158,8 +158,9 @@ defmodule IEx.HelpersTest do
            = capture_io(fn -> t Enum.t end)
     assert capture_io(fn -> t Enum.t end) == capture_io(fn -> t Enum.t/0 end)
 
-    assert "@opaque t()\n" = capture_io(fn -> t MapSet.t end)
-    assert capture_io(fn -> t MapSet.t end) == capture_io(fn -> t MapSet.t/0 end)
+    assert "@opaque t(value)\n@type t() :: t(term())\n" = capture_io(fn -> t MapSet.t end)
+
+    assert capture_io(fn -> t URI.t end) == capture_io(fn -> t URI.t/0 end)
 
     content = """
     defmodule TypeSample do
@@ -198,7 +199,7 @@ defmodule IEx.HelpersTest do
     assert capture_io(fn -> s Enum.all?/1 end) ==
            "@spec all?(t()) :: boolean()\n"
     assert capture_io(fn -> s struct end) ==
-           "@spec struct(module() | map(), Enum.t()) :: map()\n"
+           "@spec struct(module() | struct(), Enum.t()) :: struct()\n"
   end
 
   test "v helper" do
@@ -493,7 +494,7 @@ defmodule IEx.HelpersTest do
 
   test "i helper" do
     output = capture_iex ~s[i(:ok)]
-    assert output == String.trim_trailing("""
+    assert output =~ String.trim_trailing("""
     Term
       :ok
     Data type

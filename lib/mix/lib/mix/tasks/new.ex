@@ -11,7 +11,7 @@ defmodule Mix.Tasks.New do
 
       mix new PATH [--sup] [--module MODULE] [--app APP] [--umbrella]
 
-  A project at the given PATH  will be created. The
+  A project at the given PATH will be created. The
   application name and module name will be retrieved
   from the path, unless `--module` or `--app` is given.
 
@@ -53,11 +53,14 @@ defmodule Mix.Tasks.New do
         Mix.raise "Expected PATH to be given, please use \"mix new PATH\""
       [path | _] ->
         app = opts[:app] || Path.basename(Path.expand(path))
-        check_application_name!(app, !!opts[:app])
+        check_application_name!(app, !opts[:app])
         mod = opts[:module] || Macro.camelize(app)
         check_mod_name_validity!(mod)
         check_mod_name_availability!(mod)
-        File.mkdir_p!(path)
+        unless path == "." do
+          check_directory_existence!(path)
+          File.mkdir_p!(path)
+        end
 
         File.cd! path, fn ->
           if opts[:umbrella] do
@@ -86,11 +89,10 @@ defmodule Mix.Tasks.New do
     create_file "config/config.exs", config_template(assigns)
 
     create_directory "lib"
+    create_file "lib/#{app}.ex", lib_template(assigns)
 
     if opts[:sup] do
-      create_file "lib/#{app}.ex", lib_sup_template(assigns)
-    else
-      create_file "lib/#{app}.ex", lib_template(assigns)
+      create_file "lib/#{app}/application.ex", lib_app_template(assigns)
     end
 
     create_directory "test"
@@ -116,7 +118,7 @@ defmodule Mix.Tasks.New do
   end
 
   defp otp_app(mod, true) do
-    "    [applications: [:logger],\n     mod: {#{mod}, []}]"
+    "    [applications: [:logger],\n     mod: {#{mod}.Application, []}]"
   end
 
   defp generate_umbrella(_app, mod, path, _opts) do
@@ -149,13 +151,13 @@ defmodule Mix.Tasks.New do
     |> Mix.shell.info
   end
 
-  defp check_application_name!(name, from_app_flag) do
+  defp check_application_name!(name, inferred?) do
     unless name =~ ~r/^[a-z][\w_]*$/ do
       Mix.raise "Application name must start with a letter and have only lowercase " <>
                 "letters, numbers and underscore, got: #{inspect name}" <>
-                (if !from_app_flag do
+                (if inferred? do
                   ". The application name is inferred from the path, if you'd like to " <>
-                  "explicitly name the application then use the \"--app APP\" option."
+                  "explicitly name the application then use the \"--app APP\" option"
                 else
                   ""
                 end)
@@ -172,6 +174,12 @@ defmodule Mix.Tasks.New do
     name = Module.concat(Elixir, name)
     if Code.ensure_loaded?(name) do
       Mix.raise "Module name #{inspect name} is already taken, please choose another name"
+    end
+  end
+
+  defp check_directory_existence!(path) do
+    if File.dir?(path) and not Mix.shell.yes?("The directory #{inspect(path)} already exists. Are you sure you want to continue?") do
+      Mix.raise "Please select another directory for installation"
     end
   end
 
@@ -222,8 +230,9 @@ defmodule Mix.Tasks.New do
       end
       ```
 
-  If [published on HexDocs](https://hex.pm/docs/tasks#hex_docs), the docs can
-  be found at [https://hexdocs.pm/<%= @app %>](https://hexdocs.pm/<%= @app %>)
+  Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
+  and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
+  be found at [https://hexdocs.pm/<%= @app %>](https://hexdocs.pm/<%= @app %>).
   <% end %>
   """
 
@@ -272,11 +281,11 @@ defmodule Mix.Tasks.New do
 
     # Dependencies can be Hex packages:
     #
-    #   {:mydep, "~> 0.3.0"}
+    #   {:my_dep, "~> 0.3.0"}
     #
     # Or git/path repositories:
     #
-    #   {:mydep, git: "https://github.com/elixir-lang/mydep.git", tag: "0.1.0"}
+    #   {:my_dep, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
     #
     # Type "mix help deps" for more examples and options
     defp deps do
@@ -311,15 +320,15 @@ defmodule Mix.Tasks.New do
 
     # Dependencies can be Hex packages:
     #
-    #   {:mydep, "~> 0.3.0"}
+    #   {:my_dep, "~> 0.3.0"}
     #
     # Or git/path repositories:
     #
-    #   {:mydep, git: "https://github.com/elixir-lang/mydep.git", tag: "0.1.0"}
+    #   {:my_dep, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
     #
     # To depend on another app inside the umbrella:
     #
-    #   {:myapp, in_umbrella: true}
+    #   {:my_app, in_umbrella: true}
     #
     # Type "mix help deps" for more examples and options
     defp deps do
@@ -341,11 +350,11 @@ defmodule Mix.Tasks.New do
 
     # Dependencies can be Hex packages:
     #
-    #   {:mydep, "~> 0.3.0"}
+    #   {:my_dep, "~> 0.3.0"}
     #
     # Or git/path repositories:
     #
-    #   {:mydep, git: "https://github.com/elixir-lang/mydep.git", tag: "0.1.0"}
+    #   {:my_dep, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
     #
     # Type "mix help deps" for more examples and options.
     #
@@ -412,15 +421,33 @@ defmodule Mix.Tasks.New do
 
   embed_template :lib, """
   defmodule <%= @mod %> do
+    @moduledoc \"""
+    Documentation for <%= @mod %>.
+    \"""
+
+    @doc \"""
+    Hello world.
+
+    ## Examples
+
+        iex> <%= @mod %>.hello
+        :world
+
+    \"""
+    def hello do
+      :world
+    end
   end
   """
 
-  embed_template :lib_sup, """
-  defmodule <%= @mod %> do
-    use Application
-
+  embed_template :lib_app, """
+  defmodule <%= @mod %>.Application do
     # See http://elixir-lang.org/docs/stable/elixir/Application.html
     # for more information on OTP Applications
+    @moduledoc false
+
+    use Application
+
     def start(_type, _args) do
       import Supervisor.Spec, warn: false
 

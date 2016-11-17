@@ -26,7 +26,7 @@ defmodule Application do
   Once an application is started, OTP provides an application environment
   that can be used to configure the application.
 
-  Assuming you are inside a Mix project, you can edit the `application`
+  Assuming you are inside a Mix project, you can edit the `application/0`
   function in the `mix.exs` file to the following:
 
       def application do
@@ -119,7 +119,7 @@ defmodule Application do
   startup is successful. `pid` should be the PID of the top supervisor. `state`
   can be an arbitrary term, and if omitted will default to `[]`; if the
   application is later stopped, `state` is passed to the `stop/1` callback (see
-  the documentation for the `stop/2` callback for more information).
+  the documentation for the `c:stop/1` callback for more information).
 
   `use Application` provides no default implementation for the `start/2`
   callback.
@@ -466,7 +466,7 @@ defmodule Application do
     try do
       do_format_error(reason)
     catch
-      # A user could create an error that looks like a builtin one
+      # A user could create an error that looks like a built-in one
       # causing an error.
       :error, _ ->
         inspect(reason)

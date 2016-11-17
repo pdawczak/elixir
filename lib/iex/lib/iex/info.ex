@@ -14,7 +14,15 @@ end
 
 defimpl IEx.Info, for: Atom do
   def info(atom) do
-    specific_info = if Code.ensure_loaded?(atom), do: info_module(atom), else: info_atom(atom)
+    specific_info =
+      cond do
+        Code.ensure_loaded?(atom) ->
+          info_module(atom)
+        match?("Elixir." <> _, Atom.to_string(atom)) ->
+          info_module_like_atom(atom)
+        true ->
+          info_atom(atom)
+      end
     ["Data type": "Atom"] ++ specific_info
   end
 
@@ -27,14 +35,32 @@ defimpl IEx.Info, for: Atom do
       end
 
     mod_info = mod.module_info()
-    ["Module bytecode": module_object_file(mod),
-     "Source": module_source_file(mod_info),
-     "Version": module_version(mod_info),
-     "Compile time": module_compile_time(mod_info),
-     "Compile options": module_compile_options(mod_info),
-     "Description": "#{extra}Call #{inspect mod}.module_info() to access metadata.",
-     "Raw representation": ":" <> inspect(Atom.to_string(mod)),
-     "Reference modules": "Module, Atom"]
+    generic_info =
+      ["Module bytecode": module_object_file(mod),
+       "Source": module_source_file(mod_info),
+       "Version": module_version(mod_info),
+       "Compile options": module_compile_options(mod_info),
+       "Description": "#{extra}Call #{inspect mod}.module_info() to access metadata."]
+
+    specific_info =
+      if function_exported?(mod, :__protocol__, 1) do
+        impls =
+          mod
+          |> Protocol.extract_impls(:code.get_path())
+          |> Enum.map_join(", ", &inspect/1)
+        ["Protocol": "This module is a protocol. These data structures implement it:\n  #{impls}"]
+      else
+        []
+      end
+
+    generic_info ++ specific_info ++
+      ["Raw representation": ":" <> inspect(Atom.to_string(mod)),
+       "Reference modules": "Module, Atom"]
+  end
+
+  defp info_module_like_atom(atom) do
+    ["Raw representation": ":" <> inspect(Atom.to_string(atom)),
+     "Reference modules": "Atom"]
   end
 
   defp info_atom(_atom) do
@@ -60,19 +86,8 @@ defimpl IEx.Info, for: Atom do
     default_or_apply(mod_info[:compile][:options], &inspect/1)
   end
 
-  defp module_compile_time(mod_info) do
-    default_or_apply(mod_info[:compile][:time], &format_time/1)
-  end
-
-  defp format_time({year, month, day, hour, min, sec}) do
-    "#{year}-#{zeropad(month)}-#{zeropad(day)} #{zeropad(hour)}:#{zeropad(min)}:#{zeropad(sec)}"
-  end
-
   defp default_or_apply(nil, _), do: "no value found"
   defp default_or_apply(data, fun), do: fun.(data)
-
-  defp zeropad(number) when number < 10, do: "0#{number}"
-  defp zeropad(number), do: "#{number}"
 end
 
 defimpl IEx.Info, for: List do

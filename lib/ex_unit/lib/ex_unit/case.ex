@@ -84,7 +84,7 @@ defmodule ExUnit.Case do
         end
 
         @tag cd: "fixtures"
-        test "reads utf-8 fixtures" do
+        test "reads UTF-8 fixtures" do
           File.read("hello")
         end
       end
@@ -132,7 +132,7 @@ defmodule ExUnit.Case do
     * `:capture_log` - see the "Log Capture" section below
     * `:skip` - skips the test with the given reason
     * `:timeout` - customizes the test timeout in milliseconds (defaults to 60000)
-    * `:report` - include the given tags and context keys on error reports,
+    * `:report` - includes the given tags and context keys on error reports,
       see the "Reporting tags" section
 
   ### Reporting tags
@@ -438,7 +438,7 @@ defmodule ExUnit.Case do
 
   The attribute values will be available as a key/value pair in
   `context.registered`. The key/value pairs will be cleared
-  after each `ExUnit.Case.test` similar to `@tag`.
+  after each `ExUnit.Case.test/3` similar to `@tag`.
 
   `Module.register_attribute/3` is used to register the attribute,
   this function takes the same options.
