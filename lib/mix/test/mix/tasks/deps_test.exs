@@ -53,7 +53,7 @@ defmodule Mix.Tasks.DepsTest do
       assert_received {:mix_shell, :info, ["* noappfile (deps/noappfile)"]}
       assert_received {:mix_shell, :info, ["  could not find an app file at _build/dev/lib/noappfile/ebin/noappfile.app" <> _]}
       assert_received {:mix_shell, :info, ["* nosemver (deps/nosemver)"]}
-      assert_received {:mix_shell, :info, ["  the app file specified a non Semantic Version: \"0.7\"" <> _]}
+      assert_received {:mix_shell, :info, ["  the app file specified a non-Semantic Versioning format: \"0.7\"" <> _]}
     end
   end
 
@@ -72,7 +72,7 @@ defmodule Mix.Tasks.DepsTest do
     end
   end
 
-  test "prints elixir req mismatches" do
+  test "prints Elixir req mismatches" do
     Mix.Project.push ReqDepsApp
 
     in_fixture "deps_status", fn ->
@@ -538,7 +538,7 @@ defmodule Mix.Tasks.DepsTest do
     purge [GitRepo, GitRepo.Mixfile]
   end
 
-  test "checks if dependencies are using old elixir version" do
+  test "checks if dependencies are using old Elixir version" do
     Mix.Project.push SuccessfulDepsApp
 
     in_fixture "deps_status", fn ->

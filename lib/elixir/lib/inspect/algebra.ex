@@ -49,7 +49,7 @@ defmodule Inspect.Opts do
       Colors can be any `t:IO.ANSI.ansidata/0` as accepted by `IO.ANSI.format/1`.
   """
 
-  # TODO: Deprecate char_lists key by v1.5
+  # TODO: Remove :char_lists key by 2.0
   defstruct structs: true,
             binaries: :infer,
             charlists: :infer,
@@ -61,7 +61,9 @@ defmodule Inspect.Opts do
             safe: true,
             syntax_colors: []
 
-  # TODO: Deprecate char_lists key and :as_char_lists value by v1.5
+  @type color_key :: atom
+
+  # TODO: Remove :char_lists key and :as_char_lists value by 2.0
   @type t :: %__MODULE__{
                structs: boolean,
                binaries: :infer | :as_binaries | :as_strings,
@@ -72,8 +74,8 @@ defmodule Inspect.Opts do
                base: :decimal | :binary | :hex | :octal,
                pretty: boolean,
                safe: boolean,
-               syntax_colors: [{atom, IO.ANSI.ansidata}]
-  }
+               syntax_colors: [{color_key, IO.ANSI.ansidata}]
+             }
 end
 
 defmodule Inspect.Error do
@@ -157,13 +159,11 @@ defmodule Inspect.Algebra do
   @tail_separator " |"
   @newline "\n"
   @nesting 1
-  @break " "
+  @space " "
 
   # Functional interface to "doc" records
 
   @type t :: :doc_nil | :doc_line | doc_cons | doc_nest | doc_break | doc_group | doc_color | binary
-
-  @type color_identifier :: atom
 
   @typep doc_cons :: {:doc_cons, t, t}
   defmacrop doc_cons(left, right) do
@@ -172,7 +172,7 @@ defmodule Inspect.Algebra do
 
   @typep doc_nest :: {:doc_nest, t, non_neg_integer}
   defmacrop doc_nest(doc, indent) do
-    quote do: {:doc_nest, unquote(doc), unquote(indent) }
+    quote do: {:doc_nest, unquote(doc), unquote(indent)}
   end
 
   @typep doc_break :: {:doc_break, binary}
@@ -277,7 +277,7 @@ defmodule Inspect.Algebra do
   @spec empty() :: :doc_nil
   def empty, do: :doc_nil
 
-  @doc """
+  @doc ~S"""
   Concatenates two document entities returning a new document.
 
   ## Examples
@@ -292,7 +292,7 @@ defmodule Inspect.Algebra do
     doc_cons(doc1, doc2)
   end
 
-  @doc """
+  @doc ~S"""
   Concatenates a list of documents returning a new document.
 
   ## Examples
@@ -307,22 +307,18 @@ defmodule Inspect.Algebra do
     fold_doc(docs, &concat(&1, &2))
   end
 
-  @doc """
-  Colors a document if a the identifier has a color in the options.
+  @doc ~S"""
+  Colors a document if the `color_key` has a color in the options.
   """
-  @spec color(t, color_identifier, Inspect.Opts.t) :: doc_color
-  def color(doc, identifier, %Inspect.Opts{syntax_colors: syntax_colors}) when is_doc(doc) do
-    precolor = Keyword.get(syntax_colors, identifier)
-    if precolor do
+  @spec color(t, Inspect.Opts.color_key, Inspect.Opts.t) :: doc_color
+  def color(doc, color_key, %Inspect.Opts{syntax_colors: syntax_colors}) when is_doc(doc) do
+    if precolor = Keyword.get(syntax_colors, color_key) do
       postcolor = Keyword.get(syntax_colors, :reset, :reset)
-      concat(
-        doc_color(doc, List.wrap(precolor)),
-        doc_color(empty(), List.wrap(postcolor)))
+      concat(doc_color(doc, precolor), doc_color(empty(), postcolor))
     else
       doc
     end
   end
-
 
   @doc ~S"""
   Nests the given document at the given `level`.
@@ -376,19 +372,19 @@ defmodule Inspect.Algebra do
   @spec break(binary) :: doc_break
   def break(string) when is_binary(string), do: doc_break(string)
 
-  @doc """
-  Returns a document entity representing the default break.
+  @doc ~S"""
+  Returns a document entity with the `" "` string as break.
 
-  Same as calling `break/1` with the default break.
+  See `break/1` for more information.
   """
   @spec break() :: doc_break
-  def break(), do: doc_break(@break)
+  def break(), do: doc_break(@space)
 
-  @doc """
-  Glues two documents together inserting the default break between them.
+  @doc ~S"""
+  Glues two documents together inserting `" "` as a break between them.
 
-  The break that is inserted between `left` and `right` is the one returned by
-  `break/0`.
+  This means the two documents will be separeted by `" "` in case they
+  fit in the same line. Otherwise a line break is used.
 
   ## Examples
 
@@ -400,7 +396,7 @@ defmodule Inspect.Algebra do
   @spec glue(t, t) :: t
   def glue(doc1, doc2), do: concat(doc1, concat(break(), doc2))
 
-  @doc """
+  @doc ~S"""
   Glues two documents (`doc1` and `doc2`) together inserting the given
   break `break_string` between them.
 
@@ -419,6 +415,9 @@ defmodule Inspect.Algebra do
 
   @doc ~S"""
   Returns a group containing the specified document `doc`.
+
+  Documents in a group are attempted to be rendered together
+  to the best of the renderer ability.
 
   ## Examples
 
@@ -449,7 +448,7 @@ defmodule Inspect.Algebra do
     doc_group(doc)
   end
 
-  @doc """
+  @doc ~S"""
   Inserts a mandatory single space between two documents.
 
   ## Examples
@@ -475,7 +474,7 @@ defmodule Inspect.Algebra do
   @spec line(t, t) :: t
   def line(doc1, doc2), do: concat(doc1, concat(:doc_line, doc2))
 
-  @doc """
+  @doc ~S"""
   Folds a list of documents into a document using the given folder function.
 
   The list of documents is folded "from the right"; in that, this function is

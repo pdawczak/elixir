@@ -93,7 +93,7 @@ defmodule Application do
   @doc """
   Called when an application is started.
 
-  This function is called when an the application is started using
+  This function is called when an application is started using
   `Application.start/2` (and functions on top of that, such as
   `Application.ensure_started/2`). This function should start the top-level
   process of the application (which should be the top supervisor of the
@@ -104,7 +104,7 @@ defmodule Application do
 
     * `:normal` - used if the startup is a normal startup or if the application
       is distributed and is started on the current node because of a failover
-      from another mode and the application specification key `:start_phases`
+      from another node and the application specification key `:start_phases`
       is `:undefined`.
     * `{:takeover, node}` - used if the application is distributed and is
       started on the current node because of a failover on the node `node`.
@@ -334,7 +334,7 @@ defmodule Application do
   started before this application is. If not, `{:error, {:not_started, app}}` is
   returned, where `app` is the name of the missing application.
 
-  In case you want to automatically  load **and start** all of `app`'s dependencies,
+  In case you want to automatically load **and start** all of `app`'s dependencies,
   see `ensure_all_started/2`.
 
   The `type` argument specifies the type of the application:
@@ -419,7 +419,7 @@ defmodule Application do
       #=> "bar-123"
 
   For more information on code paths, check the `Code` module in
-  Elixir and also Erlang's `:code` module.
+  Elixir and also Erlang's [`:code` module](http://www.erlang.org/doc/man/code.html).
   """
   @spec app_dir(app) :: String.t
   def app_dir(app) when is_atom(app) do

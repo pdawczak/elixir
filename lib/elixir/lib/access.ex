@@ -82,7 +82,7 @@ defmodule Access do
       #=> "John"
 
   The same `user.name` syntax can also be used by `Kernel.put_in/2`
-  to for updating structs fields:
+  for updating structs fields:
 
       put_in user.name, "Mary"
       #=> %User{name: "Mary"}
@@ -515,7 +515,7 @@ defmodule Access do
       {["john", "mary"], [%{}, %{}]}
 
   Here is an example that traverses the list dropping even
-  numbers and multipling odd numbers by 2:
+  numbers and multiplying odd numbers by 2:
 
       iex> require Integer
       iex> get_and_update_in([1, 2, 3, 4, 5], [Access.all], fn

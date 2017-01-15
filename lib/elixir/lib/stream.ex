@@ -423,6 +423,10 @@ defmodule Stream do
   This operation will block the caller by the given interval
   every time a new item is streamed.
 
+  Do not use this function to generate a sequence of numbers.
+  If blocking the caller process is not necessary, use
+  `Stream.iterate(0, & &1 + 1)` instead.
+
   ## Examples
 
       iex> Stream.interval(10) |> Enum.take(10)
@@ -432,7 +436,7 @@ defmodule Stream do
   @spec interval(non_neg_integer) :: Enumerable.t
   def interval(n) do
     unfold 0, fn(count) ->
-      :timer.sleep(n)
+      Process.sleep(n)
       {count, count + 1}
     end
   end
@@ -897,8 +901,9 @@ defmodule Stream do
   end
 
   @doc false
+  # TODO: Remove on 2.0
+  # (hard-deprecated in elixir_dispatch)
   def uniq(enum, fun) do
-    IO.warn "Stream.uniq/2 is deprecated, use Stream.uniq_by/2 instead"
     uniq_by(enum, fun)
   end
 
@@ -1357,12 +1362,12 @@ defmodule Stream do
   @compile {:inline, lazy: 2, lazy: 3, lazy: 4}
 
   defp lazy(%Stream{done: nil, funs: funs} = lazy, fun),
-    do: %{lazy | funs: [fun | funs] }
+    do: %{lazy | funs: [fun | funs]}
   defp lazy(enum, fun),
     do: %Stream{enum: enum, funs: [fun]}
 
   defp lazy(%Stream{done: nil, funs: funs, accs: accs} = lazy, acc, fun),
-    do: %{lazy | funs: [fun | funs], accs: [acc | accs] }
+    do: %{lazy | funs: [fun | funs], accs: [acc | accs]}
   defp lazy(enum, acc, fun),
     do: %Stream{enum: enum, funs: [fun], accs: [acc]}
 

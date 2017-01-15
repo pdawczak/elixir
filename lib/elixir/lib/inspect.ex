@@ -69,16 +69,17 @@ defimpl Inspect, for: Atom do
   defp color_key(nil), do: :nil
   defp color_key(_), do: :atom
 
-  def inspect(false),  do: "false"
-  def inspect(true),   do: "true"
-  def inspect(nil),    do: "nil"
-  def inspect(:""),    do: ":\"\""
+  def inspect(false), do: "false"
+  def inspect(true), do: "true"
+  def inspect(nil), do: "nil"
 
   def inspect(atom) do
     binary = Atom.to_string(atom)
 
     cond do
-      valid_ref_identifier?(binary) ->
+      valid_alias?(binary) ->
+        # If the given binary is just a succession like "Elixir.Elixir.Elixir",
+        # inspect it as is, otherwise, strip the leading "Elixir".
         if only_elixir?(binary) do
           binary
         else
@@ -102,46 +103,48 @@ defimpl Inspect, for: Atom do
 
   # Detect if atom is an atom alias (Elixir.Foo.Bar.Baz)
 
-  defp valid_ref_identifier?("Elixir" <> rest) do
-    valid_ref_piece?(rest)
-  end
+  defp valid_alias?("Elixir" <> rest), do: valid_alias_piece?(rest)
+  defp valid_alias?(_other), do: false
 
-  defp valid_ref_identifier?(_), do: false
+  # Detects if the given binary is a valid "ref" piece, that is, a valid
+  # successor of "Elixir" in atoms like "Elixir.String.Chars".
+  defp valid_alias_piece?(<<?., char, rest::binary>>) when char in ?A..?Z,
+    do: valid_alias_piece?(trim_leading_while_valid_identifier(rest))
+  defp valid_alias_piece?(<<>>),
+    do: true
+  defp valid_alias_piece?(_other),
+    do: false
 
-  defp valid_ref_piece?(<<?., h, t::binary>>) when h in ?A..?Z do
-    valid_ref_piece? valid_identifier?(t)
-  end
+  defp valid_atom_identifier?(<<char, rest::binary>>)
+       when char in ?a..?z or char in ?A..?Z or char == ?_,
+    do: valid_atom_piece?(rest)
+  defp valid_atom_identifier?(_other),
+    do: false
 
-  defp valid_ref_piece?(<<>>), do: true
-  defp valid_ref_piece?(_),    do: false
-
-  # Detect if atom
-
-  defp valid_atom_identifier?(<<h, t::binary>>) when h in ?a..?z or h in ?A..?Z or h == ?_ do
-    valid_atom_piece?(t)
-  end
-
-  defp valid_atom_identifier?(_), do: false
-
-  defp valid_atom_piece?(t) do
-    case valid_identifier?(t) do
-      <<>>              -> true
-      <<??>>            -> true
-      <<?!>>            -> true
-      <<?@, t::binary>> -> valid_atom_piece?(t)
-      _                 -> false
+  defp valid_atom_piece?(binary) do
+    case trim_leading_while_valid_identifier(binary) do
+      rest when rest in ["", "?", "!"] ->
+        true
+      "@" <> rest ->
+        valid_atom_piece?(rest)
+      _other ->
+        false
     end
   end
 
-  defp valid_identifier?(<<h, t::binary>>)
-      when h in ?a..?z
-      when h in ?A..?Z
-      when h in ?0..?9
-      when h == ?_ do
-    valid_identifier? t
+  # Takes a binary and trims all the valid identifier characters (alphanumeric
+  # and _) from its beginning.
+  defp trim_leading_while_valid_identifier(<<char, rest::binary>>)
+      when char in ?a..?z
+      when char in ?A..?Z
+      when char in ?0..?9
+      when char == ?_ do
+    trim_leading_while_valid_identifier(rest)
   end
 
-  defp valid_identifier?(other), do: other
+  defp trim_leading_while_valid_identifier(other) do
+    other
+  end
 end
 
 defimpl Inspect, for: BitString do
@@ -235,8 +238,8 @@ defimpl Inspect, for: BitString do
              to_hex(d), to_hex(e), to_hex(f), ?}]
   end
 
-  defp to_hex(c) when c in 0..9, do: ?0+c
-  defp to_hex(c) when c in 10..15, do: ?A+c-10
+  defp to_hex(c) when c in 0..9, do: ?0 + c
+  defp to_hex(c) when c in 10..15, do: ?A + c - 10
 
   ## Bitstrings
 
@@ -282,14 +285,18 @@ defimpl Inspect, for: List do
     color("[]", :list, opts)
   end
 
-  # TODO: Deprecate :char_lists and :as_char_lists keys in v1.5
+  # TODO: Remove :char_list and :as_char_lists handling in 2.0
   def inspect(term, %Inspect.Opts{charlists: lists, char_lists: lists_deprecated} = opts) do
     lists =
       if lists == :infer and lists_deprecated != :infer do
         case lists_deprecated do
           :as_char_lists ->
+            IO.warn "the :char_lists inspect option and its :as_char_lists " <>
+              "value are deprecated, use the :charlists option and its " <>
+              ":as_charlists value instead"
             :as_charlists
           _ ->
+            IO.warn "the :char_lists inspect option is deprecated, use :charlists instead"
             lists_deprecated
         end
       else
@@ -541,8 +548,7 @@ defimpl Inspect, for: Any do
       _ -> Inspect.Map.inspect(map, opts)
     else
       dunder ->
-        is_struct = :maps.keys(dunder) == :maps.keys(map)
-        if is_struct do
+        if :maps.keys(dunder) == :maps.keys(map) do
           pruned = :maps.remove(:__exception__, :maps.remove(:__struct__, map))
           colorless_opts = %{opts | syntax_colors: []}
           Inspect.Map.inspect(pruned, Inspect.Atom.inspect(struct, colorless_opts), opts)

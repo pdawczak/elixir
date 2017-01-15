@@ -23,8 +23,8 @@ defmodule Registry do
 
   ## Using in `:via`
 
-  Once the registry is started with a given name (using
-  `Registry.start_link/2`), it can be used to register and access named
+  Once the registry is started with a given name using
+  `Registry.start_link/2`, it can be used to register and access named
   processes using the `{:via, Registry, {registry, key}}` tuple:
 
       {:ok, _} = Registry.start_link(:unique, Registry.ViaTest)
@@ -68,7 +68,7 @@ defmodule Registry do
 
       Registry.dispatch(Registry.DispatcherTest, "hello", fn entries ->
         for {pid, {module, function}} <- entries, do: apply(module, function, [pid])
-      end
+      end)
       # Prints #PID<...> where the pid is for the process that called register/3 above
       #=> :ok
 
@@ -430,8 +430,8 @@ defmodule Registry do
         safe_lookup_second(key_ets, key)
 
       {:duplicate, partitions, _key_ets} ->
-        for i <- :lists.seq(0, partitions-1),
-            pair <- safe_lookup_second(key_ets!(registry, i), key),
+        for partition <- 0..(partitions - 1),
+            pair <- safe_lookup_second(key_ets!(registry, partition), key),
             do: pair
     end
   end
@@ -480,8 +480,8 @@ defmodule Registry do
         :ets.select(key_ets, spec)
 
       {:duplicate, partitions, _key_ets} ->
-        for i <- :lists.seq(0, partitions-1),
-            pair <- :ets.select(key_ets!(registry, i), spec),
+        for partition <- 0..(partitions - 1),
+            pair <- :ets.select(key_ets!(registry, partition), spec),
             do: pair
     end
   end
@@ -540,7 +540,7 @@ defmodule Registry do
 
   ## Examples
 
-  It unregister all entries for `key` for unique registries:
+  For unique registries:
 
       iex> Registry.start_link(:unique, Registry.UniqueUnregisterTest)
       iex> Registry.register(Registry.UniqueUnregisterTest, "hello", :world)
@@ -551,7 +551,7 @@ defmodule Registry do
       iex> Registry.keys(Registry.UniqueUnregisterTest, self())
       []
 
-  As well as duplicate registries:
+  For duplicate registries:
 
       iex> Registry.start_link(:duplicate, Registry.DuplicateUnregisterTest)
       iex> Registry.register(Registry.DuplicateUnregisterTest, "hello", :world)
@@ -595,7 +595,7 @@ defmodule Registry do
   lookup.
 
   This function returns `{:ok, owner}` or `{:error, reason}`.
-  The `owner` is the pid is the registry partition responsible for
+  The `owner` is the pid in the registry partition responsible for
   the pid. The owner is automatically linked to the caller.
 
   If the registry has unique keys, it will return `{:ok, owner}` unless
@@ -811,7 +811,7 @@ defmodule Registry.Supervisor do
     true = :ets.insert(registry, entries)
 
     children =
-      for i <- 0..partitions-1 do
+      for i <- 0..partitions - 1 do
         key_partition = Registry.Partition.key_name(registry, i)
         pid_partition = Registry.Partition.pid_name(registry, i)
         arg = {kind, registry, i, partitions, key_partition, pid_partition, listeners}

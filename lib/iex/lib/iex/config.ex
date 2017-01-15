@@ -4,8 +4,6 @@ defmodule IEx.Config do
   @table __MODULE__
   @agent __MODULE__
   @keys [:colors, :inspect, :history_size, :default_prompt, :alive_prompt, :width]
-  @colors [:eval_interrupt, :eval_result, :eval_error, :eval_info,
-           :stack_app, :stack_info, :ls_directory, :ls_device]
 
   # Read API
 
@@ -82,8 +80,9 @@ defmodule IEx.Config do
 
   # Used by inspect
   defp default_color(:syntax_colors) do
-    [number: :magenta, atom: :cyan, string: :green,
-     boolean: :magenta, nil: :magenta]
+    [atom: :cyan, string: :green, list: :default_color,
+     boolean: :magenta, nil: :magenta, tuple: :default_color,
+     binary: :default_color, map: :default_color]
   end
 
   # Used by ansi docs
@@ -176,7 +175,7 @@ defmodule IEx.Config do
   defp merge_option(:default_prompt, _old, new) when is_binary(new), do: new
   defp merge_option(:alive_prompt, _old, new) when is_binary(new), do: new
   defp merge_option(:width, _old, new) when is_integer(new), do: new
-  defp merge_option(k, _old, new) do
-    raise ArgumentError, "invalid configuration or value for pair #{inspect k} - #{inspect new}"
+  defp merge_option(key, _old, new) do
+    raise ArgumentError, "invalid configuration or value for pair #{inspect key} - #{inspect new}"
   end
 end

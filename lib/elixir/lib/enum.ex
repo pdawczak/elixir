@@ -486,9 +486,9 @@ defmodule Enum do
   """
   @spec count(t, (element -> as_boolean(term))) :: non_neg_integer
   def count(enumerable, fun) when is_function(fun, 1) do
-    Enumerable.reduce(enumerable, {:cont, 0}, fn(entry, acc) ->
-      {:cont, if(fun.(entry), do: acc + 1, else: acc)}
-    end) |> elem(1)
+    reduce(enumerable, 0, fn(entry, acc) ->
+      if(fun.(entry), do: acc + 1, else: acc)
+    end)
   end
 
   @doc """
@@ -1630,7 +1630,7 @@ defmodule Enum do
   end
 
   @doc false
-  # TODO: Deprecate by v1.5
+  # TODO: Deprecate by v1.6 (hard-deprecation)
   @spec partition(t, (element -> any)) :: {list, list}
   def partition(enumerable, fun) when is_function(fun, 1) do
     split_with(enumerable, fun)
@@ -1641,7 +1641,7 @@ defmodule Enum do
 
   Raises `Enum.EmptyError` if `enumerable` is empty.
 
-  This function uses Erlang's `:rand` module to calculate
+  This function uses Erlang's [`:rand` module](http://www.erlang.org/doc/man/rand.html) to calculate
   the random value. Check its documentation for setting a
   different random algorithm or a different seed.
 
@@ -1755,6 +1755,14 @@ defmodule Enum do
     :lists.foldl(fun, acc, enumerable)
   end
 
+  def reduce(first..last, acc, fun) when is_function(fun, 2) do
+    if first <= last do
+      reduce_range_inc(first, last, acc, fun)
+    else
+      reduce_range_dec(first, last, acc, fun)
+    end
+  end
+
   def reduce(%{__struct__: _} = enumerable, acc, fun) when is_function(fun, 2) do
     Enumerable.reduce(enumerable, {:cont, acc},
                       fn x, acc -> {:cont, fun.(x, acc)} end) |> elem(1)
@@ -1767,6 +1775,22 @@ defmodule Enum do
   def reduce(enumerable, acc, fun) when is_function(fun, 2) do
     Enumerable.reduce(enumerable, {:cont, acc},
                       fn x, acc -> {:cont, fun.(x, acc)} end) |> elem(1)
+  end
+
+  defp reduce_range_inc(first, first, acc, fun) do
+    fun.(first, acc)
+  end
+
+  defp reduce_range_inc(first, last, acc, fun) do
+    reduce_range_inc(first + 1, last, fun.(first, acc), fun)
+  end
+
+  defp reduce_range_dec(first, first, acc, fun) do
+    fun.(first, acc)
+  end
+
+  defp reduce_range_dec(first, last, acc, fun)  do
+    reduce_range_dec(first - 1, last, fun.(first, acc), fun)
   end
 
   @doc """
@@ -1915,7 +1939,7 @@ defmodule Enum do
   @doc """
   Returns a list with the elements of `enumerable` shuffled.
 
-  This function uses Erlang's `:rand` module to calculate
+  This function uses Erlang's [`:rand` module](http://www.erlang.org/doc/man/rand.html) to calculate
   the random value. Check its documentation for setting a
   different random algorithm or a different seed.
 
@@ -2350,9 +2374,9 @@ defmodule Enum do
   defp do_take_last([], [], _, acc),
     do: acc
   defp do_take_last([], [h | t], count, acc),
-    do: do_take_last([], t, count-1, [h | acc])
+    do: do_take_last([], t, count - 1, [h | acc])
   defp do_take_last([h | t], buf2, count, acc),
-    do: do_take_last(t, buf2, count-1, [h | acc])
+    do: do_take_last(t, buf2, count - 1, [h | acc])
 
   @doc """
   Returns a list of every `nth` item in the enumerable,
@@ -2519,8 +2543,9 @@ defmodule Enum do
   end
 
   @doc false
+  # TODO: Remove on 2.0
+  # (hard-deprecated in elixir_dispatch)
   def uniq(enumerable, fun) do
-    IO.warn "Enum.uniq/2 is deprecated, use Enum.uniq_by/2 instead"
     uniq_by(enumerable, fun)
   end
 
@@ -2530,6 +2555,8 @@ defmodule Enum do
 
   The function `fun` maps every element to a term which is used to
   determine if two elements are duplicates.
+
+  The first occurrence of each element is kept.
 
   ## Example
 

@@ -23,7 +23,7 @@ defmodule IEx do
       Enum.
 
   Such function may not be available on some Windows shells. You may need
-  to pass the `--werl` flag when starting iex, as in `iex --werl` for it
+  to pass the `--werl` flag when starting IEx, as in `iex --werl` for it
   to work. `--werl` may be permanently enabled by setting the `IEX_WITH_WERL`
   environment variable.
 
@@ -222,6 +222,15 @@ defmodule IEx do
       ...(1)> #iex:break
       ** (TokenMissingError) iex:1: incomplete expression
 
+  ## Exiting the shell
+
+  There are a few ways to quit the IEx shell:
+
+    * via the `BREAK` menu (available via `Ctrl+C`) by typing `q`, `Enter`
+    * by hitting `Ctrl+C`, `Ctrl+C`
+    * by hitting `Ctrl+\`
+
+  If you are connected to remote shell, it remains alive after disconnection.
   """
 
   @doc """
@@ -288,16 +297,19 @@ defmodule IEx do
   when printing results of expression evaluation. Default to
   pretty formatting with a limit of 50 entries.
 
+  To show all entries, configure the limit to `:infinity`:
+
+      IEx.configure [inspect: [limit: :infinity]]
+
   See `Inspect.Opts` for the full list of options.
 
   ## Width
 
-  An integer indicating the number of columns to use in documentation
-  output. Default is 80 columns or result of `:io.columns`, whichever
-  is smaller. The configured value will be used unless it is too large,
-  which in that case `:io.columns` is used. This way you can configure
-  IEx to be your largest screen size and it should always take up the
-  full width of your terminal screen.
+  An integer indicating the maximum number of columns to use in output.
+  The default value is 80 columns. The actual output width is the minimum
+  of this number and result of `:io.columns`. This way you can configure IEx
+  to be your largest screen size and it should always take up the full width
+  of your current terminal screen.
 
   ## History size
 
@@ -370,7 +382,7 @@ defmodule IEx do
   @doc """
   Gets the IEx width for printing.
 
-  Used by helpers and it has a maximum cap of 80 chars.
+  Used by helpers and it has a default maximum cap of 80 chars.
   """
   def width do
     IEx.Config.width()
@@ -438,7 +450,7 @@ defmodule IEx do
       Interactive Elixir - press Ctrl+C to exit (type h() ENTER for help)
 
   Setting variables or importing modules in IEx does not
-  affect the caller the environment (hence it is called `pry`).
+  affect the caller's environment (hence it is called `pry`).
   """
   defmacro pry(timeout \\ 5000) do
     quote do

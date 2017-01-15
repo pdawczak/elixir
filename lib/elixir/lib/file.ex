@@ -10,6 +10,12 @@ defmodule File do
   via `cp/3` and remove files and directories recursively
   via `rm_rf/1`.
 
+  Paths given to functions in this module can be either relative to the
+  current working directory (as returned by `File.cwd/0`), or absolute
+  paths. Shell conventions like `~` are not expanded automatically.
+  To use paths like `~/Downloads`, you can use `Path.expand/1` or
+  `Path.expand/2` to expand your path to an absolute path.
+
   ## Encoding
 
   In order to write and read files, one must use the functions
@@ -96,7 +102,25 @@ defmodule File do
   end
 
   @doc """
-  Returns `true` if the path is a directory.
+  Returns `true` if the given path is a directory.
+
+  ## Examples
+
+      File.dir("./test")
+      #=> true
+
+      File.dir("test")
+      #=> true
+
+      File.dir("/usr/bin")
+      #=> true
+
+      File.dir("~/Downloads")
+      #=> false
+
+      "~/Downloads" |> Path.expand |> File.dir?
+      #=> true
+
   """
   @spec dir?(Path.t) :: boolean
   def dir?(path) do
@@ -680,6 +704,9 @@ defmodule File do
   contents are overwritten. Returns `:ok` if successful, or `{:error, reason}`
   if an error occurs.
 
+  `content` must be `iodata` (a list of bytes or a binary). Setting the
+  encoding for this function has no effect.
+
   **Warning:** Every time this function is invoked, a file descriptor is opened
   and a new process is spawned to write to the file. For this reason, if you are
   doing multiple writes in a loop, opening the file via `File.open/2` and using
@@ -1101,7 +1128,7 @@ defmodule File do
 
   defp fix_drive_letter([l, ?:, ?/ | rest] = original) when l in ?A..?Z do
     case :os.type() do
-      {:win32, _} -> [l+?a-?A, ?:, ?/ | rest]
+      {:win32, _} -> [l + ?a - ?A, ?:, ?/ | rest]
       _ -> original
     end
   end
@@ -1344,8 +1371,11 @@ defmodule File do
   defp normalize_modes([:read_ahead | rest], binary?) do
     [read_ahead: @read_ahead_size] ++ normalize_modes(rest, binary?)
   end
-  # TODO: Deprecate :char_list mode by v1.5
+  # TODO: Remove :char_list mode by 2.0
   defp normalize_modes([mode | rest], _binary?) when mode in [:charlist, :char_list] do
+    if mode == :char_list do
+      IO.warn "the :char_list mode is deprecated, use :charlist"
+    end
     normalize_modes(rest, false)
   end
   defp normalize_modes([mode | rest], binary?) do

@@ -33,7 +33,7 @@ defmodule Kernel.ExpansionTest do
     input = quote do: (alias :hello, as: World, warn: True)
     {output, env} = expand_env(input, __ENV__)
 
-    assert output == quote do: (alias :hello, as: :"Elixir.World", warn: true)
+    assert output == :hello
     assert env.aliases == [{:"Elixir.True", true}, {:"Elixir.World", :hello}]
   end
 
@@ -69,7 +69,7 @@ defmodule Kernel.ExpansionTest do
 
   test "=: does not carry rhs imports" do
     assert expand(quote do: (flatten([1, 2, 3]) = import List)) ==
-           quote do: (flatten([1, 2, 3]) = import :"Elixir.List", [])
+           quote do: (flatten([1, 2, 3]) = :"Elixir.List")
   end
 
   test "=: does not define _" do
@@ -153,13 +153,13 @@ defmodule Kernel.ExpansionTest do
   end
 
   test "locals: in guards" do
-    assert expand(quote(do: fn pid when :erlang.==(pid, self) -> pid end)) ==
+    assert expand_and_clean(quote(do: fn pid when :erlang.==(pid, self) -> pid end), [:import, :context]) ==
            quote(do: fn pid when :erlang.==(pid, :erlang.self()) -> pid end)
   end
 
   test "locals: custom imports" do
     assert expand(quote do: (import Kernel.ExpansionTarget; seventeen)) ==
-           quote do: (import :"Elixir.Kernel.ExpansionTarget", []; 17)
+           quote do: (:"Elixir.Kernel.ExpansionTarget"; 17)
   end
 
   ## Tuples
@@ -234,7 +234,7 @@ defmodule Kernel.ExpansionTest do
 
   test "remote calls: modules must be required for macros" do
     assert expand(quote do: (require Kernel.ExpansionTarget; Kernel.ExpansionTarget.seventeen)) ==
-           quote do: (require :"Elixir.Kernel.ExpansionTarget", []; 17)
+           quote do: (:"Elixir.Kernel.ExpansionTarget"; 17)
   end
 
   test "remote calls: raises when not required" do
@@ -309,7 +309,7 @@ defmodule Kernel.ExpansionTest do
   test "&: expands macros" do
 
     assert expand(quote do: (require Kernel.ExpansionTarget; &Kernel.ExpansionTarget.seventeen/0)) ==
-           quote do: (require :"Elixir.Kernel.ExpansionTarget", []; fn -> 17 end)
+           quote do: (:"Elixir.Kernel.ExpansionTarget"; fn -> 17 end)
   end
 
   ## fn
@@ -321,7 +321,7 @@ defmodule Kernel.ExpansionTest do
 
   test "fn: does not share lexical scope between clauses" do
     assert expand(quote do: fn 1 -> import List; 2 -> flatten([1, 2, 3]) end) ==
-           quote do: fn 1 -> import :"Elixir.List", []; 2 -> flatten([1, 2, 3]) end
+           quote do: fn 1 -> :"Elixir.List"; 2 -> flatten([1, 2, 3]) end
   end
 
   test "fn: expands guards" do
@@ -337,22 +337,22 @@ defmodule Kernel.ExpansionTest do
   ## Cond
 
   test "cond: expands each clause" do
-    assert expand_and_clean(quote do: (cond do x = 1 -> x; _ -> x end)) ==
+    assert expand(quote do: (cond do x = 1 -> x; _ -> x end)) ==
            quote do: (cond do x = 1 -> x; _ -> x() end)
   end
 
   test "cond: does not share lexical scope between clauses" do
-    assert expand_and_clean(quote do: (cond do 1 -> import List; 2 -> flatten([1, 2, 3]) end)) ==
-           quote do: (cond do 1 -> import :"Elixir.List", []; 2 -> flatten([1, 2, 3]) end)
+    assert expand(quote do: (cond do 1 -> import List; 2 -> flatten([1, 2, 3]) end)) ==
+           quote do: (cond do 1 -> :"Elixir.List"; 2 -> flatten([1, 2, 3]) end)
   end
 
   test "cond: does not leaks vars on head" do
-    assert expand_and_clean(quote do: (cond do x = 1 -> x; y = 2 -> y end; :erlang.+(x, y))) ==
+    assert expand(quote do: (cond do x = 1 -> x; y = 2 -> y end; :erlang.+(x, y))) ==
            quote do: (cond do x = 1 -> x; y = 2 -> y end; :erlang.+(x(), y()))
   end
 
   test "cond: leaks vars" do
-    assert expand_and_clean(quote do: (cond do 1 -> x = 1; 2 -> y = 2 end; :erlang.+(x, y))) ==
+    assert expand(quote do: (cond do 1 -> x = 1; 2 -> y = 2 end; :erlang.+(x, y))) ==
            quote do: (cond do 1 -> x = 1; 2 -> y = 2 end; :erlang.+(x, y))
   end
 
@@ -365,27 +365,27 @@ defmodule Kernel.ExpansionTest do
   ## Case
 
   test "case: expands each clause" do
-    assert expand_and_clean(quote do: (case w do x -> x; _ -> x end)) ==
+    assert expand(quote do: (case w do x -> x; _ -> x end)) ==
            quote do: (case w() do x -> x; _ -> x() end)
   end
 
   test "case: does not share lexical scope between clauses" do
-    assert expand_and_clean(quote do: (case w do 1 -> import List; 2 -> flatten([1, 2, 3]) end)) ==
-           quote do: (case w() do 1 -> import :"Elixir.List", []; 2 -> flatten([1, 2, 3]) end)
+    assert expand(quote do: (case w do 1 -> import List; 2 -> flatten([1, 2, 3]) end)) ==
+           quote do: (case w() do 1 -> :"Elixir.List"; 2 -> flatten([1, 2, 3]) end)
   end
 
   test "case: expands guards" do
-    assert expand_and_clean(quote do: (case w do x when x when __ENV__.context -> true end)) ==
+    assert expand(quote do: (case w do x when x when __ENV__.context -> true end)) ==
            quote do: (case w() do x when x when :guard -> true end)
   end
 
   test "case: does not leaks vars on head" do
-    assert expand_and_clean(quote do: (case w do x -> x; y -> y end; :erlang.+(x, y))) ==
+    assert expand(quote do: (case w do x -> x; y -> y end; :erlang.+(x, y))) ==
            quote do: (case w() do x -> x; y -> y end; :erlang.+(x(), y()))
   end
 
   test "case: leaks vars" do
-    assert expand_and_clean(quote do: (case w do x -> x = x; y -> y = y end; :erlang.+(x, y))) ==
+    assert expand(quote do: (case w do x -> x = x; y -> y = y end; :erlang.+(x, y))) ==
            quote do: (case w() do x -> x = x; y -> y = y end; :erlang.+(x, y))
   end
 
@@ -398,32 +398,32 @@ defmodule Kernel.ExpansionTest do
   ## Receive
 
   test "receive: expands each clause" do
-    assert expand_and_clean(quote do: (receive do x -> x; _ -> x end)) ==
+    assert expand(quote do: (receive do x -> x; _ -> x end)) ==
            quote do: (receive do x -> x; _ -> x() end)
   end
 
   test "receive: does not share lexical scope between clauses" do
-    assert expand_and_clean(quote do: (receive do 1 -> import List; 2 -> flatten([1, 2, 3]) end)) ==
-           quote do: (receive do 1 -> import :"Elixir.List", []; 2 -> flatten([1, 2, 3]) end)
+    assert expand(quote do: (receive do 1 -> import List; 2 -> flatten([1, 2, 3]) end)) ==
+           quote do: (receive do 1 -> :"Elixir.List"; 2 -> flatten([1, 2, 3]) end)
   end
 
   test "receive: expands guards" do
-    assert expand_and_clean(quote do: (receive do x when x when __ENV__.context -> true end)) ==
+    assert expand(quote do: (receive do x when x when __ENV__.context -> true end)) ==
            quote do: (receive do x when x when :guard -> true end)
   end
 
   test "receive: does not leaks clause vars" do
-    assert expand_and_clean(quote do: (receive do x -> x; y -> y end; :erlang.+(x, y))) ==
+    assert expand(quote do: (receive do x -> x; y -> y end; :erlang.+(x, y))) ==
            quote do: (receive do x -> x; y -> y end; :erlang.+(x(), y()))
   end
 
   test "receive: leaks vars" do
-    assert expand_and_clean(quote do: (receive do x -> x = x; y -> y = y end; :erlang.+(x, y))) ==
+    assert expand(quote do: (receive do x -> x = x; y -> y = y end; :erlang.+(x, y))) ==
            quote do: (receive do x -> x = x; y -> y = y end; :erlang.+(x, y))
   end
 
   test "receive: leaks vars on after" do
-    assert expand_and_clean(quote do: (receive do x -> x = x after y -> y; w = y end; :erlang.+(x, w))) ==
+    assert expand(quote do: (receive do x -> x = x after y -> y; w = y end; :erlang.+(x, w))) ==
            quote do: (receive do x -> x = x after y() -> y(); w = y() end; :erlang.+(x, w))
   end
 
@@ -495,31 +495,31 @@ defmodule Kernel.ExpansionTest do
     assert expand(quote do: <<x::13>>) ==
            quote do: <<x()::size(13)>>
 
-    assert expand(quote do: <<x::13 * 6>>) ==
+    assert expand(quote do: <<x::13*6>>) ==
            quote do: <<x()::unit(6)-size(13)>>
 
-    assert expand(quote do: <<x::_ * 6>>) ==
+    assert expand(quote do: <<x::_*6>>) ==
            quote do: <<x()::unit(6)>>
 
-    assert expand(quote do: <<x::13 * 6-binary>>) ==
+    assert expand(quote do: <<x::13*6-binary>>) ==
            quote do: <<x()::unit(6)-binary()-size(13) >>
 
-    assert expand(quote do: <<x::binary-13 * 6>>) ==
+    assert expand(quote do: <<x::binary-13*6>>) ==
            quote do: <<x()::binary()-unit(6)-size(13)>>
   end
 
   test "bitstrings: expands modifiers" do
     assert expand(quote do: (import Kernel.ExpansionTarget; <<x::seventeen>>)) ==
-           quote do: (import :"Elixir.Kernel.ExpansionTarget", []; <<x()::size(17)>>)
+           quote do: (:"Elixir.Kernel.ExpansionTarget"; <<x()::size(17)>>)
 
     assert expand(quote do: (import Kernel.ExpansionTarget; <<seventeen::seventeen, x::size(seventeen)>> = 1)) ==
-           quote do: (import :"Elixir.Kernel.ExpansionTarget", [];
+           quote do: (:"Elixir.Kernel.ExpansionTarget";
                       <<seventeen::size(17), x::size(seventeen)>> = 1)
   end
 
   test "bitstrings: expands modifiers args" do
     assert expand(quote do: (require Kernel.ExpansionTarget; <<x::size(Kernel.ExpansionTarget.seventeen)>>)) ==
-           quote do: (require :"Elixir.Kernel.ExpansionTarget", []; <<x()::size(17)>>)
+           quote do: (:"Elixir.Kernel.ExpansionTarget"; <<x()::size(17)>>)
   end
 
   ## Invalid
@@ -540,8 +540,8 @@ defmodule Kernel.ExpansionTest do
     13
   end
 
-  defp expand_and_clean(expr) do
-    cleaner = &Keyword.drop(&1, [:export])
+  defp expand_and_clean(expr, vars) do
+    cleaner = &Keyword.drop(&1, vars)
     expr
     |> expand_env(__ENV__)
     |> elem(0)

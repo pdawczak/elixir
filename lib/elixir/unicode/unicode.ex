@@ -1,31 +1,36 @@
+# How to update the Unicode files
+#
+# 1. Update CompositionExclusions.txt by copying original as is
+# 2. Update GraphemeBreakProperty.txt by copying original as is
+# 3. Update SpecialCasing.txt by removing comments and conditional mappings from original
+# 4. Update WhiteSpace.txt by copying the proper excerpt from PropList.txt
+# 5. Update String.Unicode.version/0
+# 6. Update Unicode version on String module docs
+#
 defmodule String.Unicode do
   @moduledoc false
-  def version, do: {8, 0, 0}
+  def version, do: {9, 0, 0}
 
   cluster_path = Path.join(__DIR__, "GraphemeBreakProperty.txt")
   regex = ~r/(?:^([0-9A-F]+)(?:\.\.([0-9A-F]+))?)\s+;\s(\w+)/m
 
-  cluster = Enum.reduce File.stream!(cluster_path), %{}, fn line, dict ->
-    [_full, first, last, class] = Regex.run(regex, line)
+  cluster = Enum.reduce File.stream!(cluster_path), %{}, fn line, acc ->
+    case Regex.run(regex, line, capture: :all_but_first) do
+      ["D800", "DFFF", _class] ->
+        acc
 
-    codepoints =
-      case {first, last} do
-        {"D800", "DFFF"} ->
-          []
-        {first, ""} ->
-          [<<String.to_integer(first, 16)::utf8>>]
-        {first, last} ->
-          range = String.to_integer(first, 16)..String.to_integer(last, 16)
-          Enum.map(range, fn int -> <<int::utf8>> end)
-      end
+      [first, "", class] ->
+        codepoint = <<String.to_integer(first, 16)::utf8>>
+        Map.update(acc, class, [codepoint], &[<<String.to_integer(first, 16)::utf8>> | &1])
 
-    Map.update(dict, class, codepoints, &(&1 ++ codepoints))
-  end
+      [first, last, class] ->
+        range = String.to_integer(first, 16)..String.to_integer(last, 16)
+        codepoints = Enum.map(range, fn int -> <<int::utf8>> end)
+        Map.update(acc, class, codepoints, &(codepoints ++ &1))
 
-  # There is no codepoint marked as Prepend by Unicode 6.3.0
-  if cluster["Prepend"] do
-    raise "it seems this new Unicode version has added Prepend items. " <>
-          "Please remove this error and uncomment the code below"
+      nil ->
+        acc
+    end
   end
 
   # Don't break CRLF
@@ -41,11 +46,11 @@ defmodule String.Unicode do
   end
 
   # Break on Prepend*
-  # for codepoint <- cluster["Prepend"] do
-  #   def next_grapheme_size(<<unquote(codepoint), rest::binary>>) do
-  #     next_prepend_size(rest, unquote(byte_size(codepoint)))
-  #   end
-  # end
+  for codepoint <- cluster["Prepend"] do
+    def next_grapheme_size(<<unquote(codepoint), rest::binary>>) do
+      next_prepend_size(rest, unquote(byte_size(codepoint)))
+    end
+  end
 
   # Handle Hangul L
   for codepoint <- cluster["L"] do
@@ -155,15 +160,15 @@ defmodule String.Unicode do
   end
 
   # Handle Prepend
-  # for codepoint <- cluster["Prepend"] do
-  #   defp next_prepend_size(<<unquote(codepoint), rest::binary>>, size) do
-  #     next_prepend_size(rest, size + unquote(byte_size(codepoint)))
-  #   end
-  # end
-  #
-  # defp next_prepend_size(rest, size) do
-  #   {size, rest}
-  # end
+  for codepoint <- cluster["Prepend"] do
+    defp next_prepend_size(<<unquote(codepoint), rest::binary>>, size) do
+      next_prepend_size(rest, size + unquote(byte_size(codepoint)))
+    end
+  end
+
+  defp next_prepend_size(rest, size) do
+    {size, rest}
+  end
 
   # Graphemes
 
@@ -356,7 +361,6 @@ defmodule String.Break do
   @moduledoc false
   @whitespace_max_size 3
 
-  # WhiteSpace.txt is extracted from Unicode's PropList.txt (just the White_Space property)
   prop_path = Path.join(__DIR__, "WhiteSpace.txt")
 
   whitespace = Enum.reduce File.stream!(prop_path), [], fn line, acc ->
@@ -372,14 +376,10 @@ defmodule String.Break do
 
   # trim_leading
 
-  def trim_leading(""), do: ""
-
   for codepoint <- whitespace do
-    def trim_leading(unquote(codepoint) <> rest) do
-      trim_leading(rest)
-    end
+    def trim_leading(unquote(codepoint) <> rest), do: trim_leading(rest)
   end
-
+  def trim_leading(""), do: ""
   def trim_leading(string) when is_binary(string), do: string
 
   # trim_trailing
@@ -425,30 +425,11 @@ defmodule String.Break do
 
   # Split
 
-  def split(""), do: []
-
-  def split(string) when is_binary(string) do
-    :lists.reverse do_split(string, "", [])
+  def split(string) do
+    for piece <- :binary.split(string, unquote(whitespace -- non_breakable), [:global]),
+        piece != "",
+        do: piece
   end
-
-  for codepoint <- whitespace -- non_breakable do
-    defp do_split(unquote(codepoint) <> rest, buffer, acc) do
-      do_split(rest, "", add_buffer_to_acc(buffer, acc))
-    end
-  end
-
-  defp do_split(<<char, rest::binary>>, buffer, acc) do
-    do_split(rest, <<buffer::binary, char>>, acc)
-  end
-
-  defp do_split(<<>>, buffer, acc) do
-    add_buffer_to_acc(buffer, acc)
-  end
-
-  @compile {:inline, add_buffer_to_acc: 2}
-
-  defp add_buffer_to_acc("", acc),     do: acc
-  defp add_buffer_to_acc(buffer, acc), do: [buffer | acc]
 
   # Decompose
 

@@ -112,8 +112,6 @@ defmodule GenEventTest do
     end
   end
 
-  @receive_timeout 1000
-
   test "start/1" do
     assert {:ok, pid} = GenEvent.start()
     assert GenEvent.which_handlers(pid) == []
@@ -437,10 +435,10 @@ defmodule GenEventTest do
     {:ok, pid} = GenEvent.start_link()
 
     assert GenEvent.add_handler(pid, DefaultHandler, []) == :ok
-    assert GenEvent.call(pid, UnknownHandler, :messages) ==
-            {:error, :not_found}
-    assert GenEvent.call(pid, DefaultHandler, :whatever) ==
-            {:error, {:bad_call, :whatever}}
+    assert {:error, :not_found} =
+           GenEvent.call(pid, UnknownHandler, :messages)
+    assert {:error, {%RuntimeError{}, [_ | _]}} =
+           GenEvent.call(pid, DefaultHandler, :whatever)
     assert GenEvent.which_handlers(pid) == []
     assert GenEvent.stop(pid) == :ok
   after

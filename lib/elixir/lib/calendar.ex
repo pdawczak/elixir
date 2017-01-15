@@ -12,18 +12,18 @@ defmodule Calendar do
   `Time`, `NaiveDateTime` and `DateTime`.
 
   Note the year, month, day, etc designations are overspecified
-  (i.e. an integer instead of 1..12 for months) because different
+  (i.e. an integer instead of `1..12` for months) because different
   calendars may have a different number of days per month, months per year and so on.
   """
 
-  @type year        :: integer
-  @type month       :: integer
-  @type day         :: integer
-  @type hour        :: 0..23
-  @type minute      :: 0..59
+  @type year :: integer
+  @type month :: integer
+  @type day :: integer
+  @type hour :: 0..23
+  @type minute :: 0..59
 
   @typedoc "From 0 to 60 to account for leap seconds"
-  @type second      :: 0..60
+  @type second :: 0..60
 
   @typedoc """
   Microseconds with stored precision.
@@ -36,39 +36,39 @@ defmodule Calendar do
   @type microsecond :: {0..999_999, 0..6}
 
   @typedoc "A calendar implementation"
-  @type calendar    :: module
+  @type calendar :: module
 
   @typedoc "The time zone ID according to the IANA tz database (e.g. Europe/Zurich)"
-  @type time_zone   :: String.t
+  @type time_zone :: String.t
 
   @typedoc "The time zone abbreviation (e.g. CET or CEST or BST etc.)"
-  @type zone_abbr   :: String.t
+  @type zone_abbr :: String.t
 
   @typedoc "The time zone UTC offset in seconds"
-  @type utc_offset  :: integer
+  @type utc_offset :: integer
 
   @typedoc "The time zone standard offset in seconds (not zero in summer times)"
-  @type std_offset  :: integer
+  @type std_offset :: integer
 
   @typedoc "Any map/struct that contains the date fields"
-  @type date :: %{calendar: calendar, year: year, month: month, day: day}
+  @type date :: %{optional(any) => any, calendar: calendar, year: year, month: month, day: day}
 
   @typedoc "Any map/struct that contains the time fields"
-  @type time :: %{hour: hour, minute: minute, second: second, microsecond: microsecond}
+  @type time :: %{optional(any) => any, hour: hour, minute: minute, second: second, microsecond: microsecond}
 
   @typedoc "Any map/struct that contains the naive_datetime fields"
-  @type naive_date_time :: %{calendar: calendar, year: year, month: month, day: day,
+  @type naive_date_time :: %{optional(any) => any, calendar: calendar, year: year, month: month, day: day,
                              hour: hour, minute: minute, second: second, microsecond: microsecond}
 
   @typedoc "Any map/struct that contains the datetime fields"
-  @type date_time :: %{calendar: calendar, year: year, month: month, day: day,
+  @type date_time :: %{optional(any) => any, calendar: calendar, year: year, month: month, day: day,
                        hour: hour, minute: minute, second: second, microsecond: microsecond,
                        time_zone: time_zone, zone_abbr: zone_abbr, utc_offset: utc_offset, std_offset: std_offset}
 
   @doc """
-  Returns the last day of the month for the given year-month pair.
+  Returns how many days there are in the given year-month.
   """
-  @callback last_day_of_month(year, month) :: day
+  @callback days_in_month(year, month) :: day
 
   @doc """
   Returns true if the given year is a leap year.
@@ -90,7 +90,7 @@ defmodule Calendar do
   @callback date_to_string(year, month, day) :: String.t
 
   @doc """
-  Coverts the date time (without time zone) into a string according to the calendar.
+  Converts the date time (without time zone) into a string according to the calendar.
   """
   @callback naive_datetime_to_string(year, month, day, hour, minute, second, microsecond) :: String.t
 
@@ -124,7 +124,7 @@ defmodule Date do
   The functions on this module work with the `Date` struct as well
   as any struct that contains the same fields as the `Date` struct,
   such as `NaiveDateTime` and `DateTime`. Such functions expect
-  `Calendar.date` in their typespecs (instead of `t`).
+  `t:Calendar.date/0` in their typespecs (instead of `t:t/0`).
 
   Developers should avoid creating the Date struct directly and
   instead rely on the functions provided by this module as well as
@@ -173,6 +173,24 @@ defmodule Date do
   @spec leap_year?(Calendar.date) :: boolean()
   def leap_year?(%{calendar: calendar, year: year}) do
     calendar.leap_year?(year)
+  end
+
+  @doc """
+  Returns the number of days in the given date month.
+
+  ## Examples
+
+      iex> Date.days_in_month(~D[1900-01-13])
+      31
+      iex> Date.days_in_month(~D[1900-02-09])
+      28
+      iex> Date.days_in_month(~N[2000-02-20 01:23:45])
+      29
+
+  """
+  @spec days_in_month(Calendar.date) :: Calendar.day
+  def days_in_month(%{calendar: calendar, year: year, month: month}) do
+    calendar.days_in_month(year, month)
   end
 
   @doc """
@@ -240,9 +258,9 @@ defmodule Date do
   """
   @spec from_iso8601(String.t) :: {:ok, t} | {:error, atom}
   def from_iso8601(<<year::4-bytes, ?-, month::2-bytes, ?-, day::2-bytes>>) do
-    with {year, ""}  <- Integer.parse(year),
+    with {year, ""} <- Integer.parse(year),
          {month, ""} <- Integer.parse(month),
-         {day, ""}   <- Integer.parse(day) do
+         {day, ""} <- Integer.parse(day) do
       new(year, month, day)
     else
       _ -> {:error, :invalid_format}
@@ -447,7 +465,7 @@ defmodule Time do
   The functions on this module work with the `Time` struct as well
   as any struct that contains the same fields as the `Time` struct,
   such as `NaiveDateTime` and `DateTime`. Such functions expect
-  `Calendar.time` in their typespecs (instead of `t`).
+  `t:Calendar.time/0` in their typespecs (instead of `t:t/0`).
 
   Developers should avoid creating the Time struct directly and
   instead rely on the functions provided by this module as well as
@@ -591,16 +609,17 @@ defmodule Time do
   end
 
   def from_iso8601(<<hour::2-bytes, ?:, min::2-bytes, ?:, sec::2-bytes, rest::binary>>) do
-    with {hour, ""}       <- Integer.parse(hour),
-         {min, ""}        <- Integer.parse(min),
-         {sec, ""}        <- Integer.parse(sec),
+    with {hour, ""} <- Integer.parse(hour),
+         {min, ""} <- Integer.parse(min),
+         {sec, ""} <- Integer.parse(sec),
          {microsec, rest} <- Calendar.ISO.parse_microsecond(rest),
-         {_offset, ""}    <- Calendar.ISO.parse_offset(rest) do
+         {_offset, ""} <- Calendar.ISO.parse_offset(rest) do
       new(hour, min, sec, microsec)
     else
       _ -> {:error, :invalid_format}
     end
   end
+
   def from_iso8601(<<_::binary>>) do
     {:error, :invalid_format}
   end
@@ -801,8 +820,6 @@ defmodule NaiveDateTime do
                             calendar: Calendar.calendar, hour: Calendar.hour, minute: Calendar.minute,
                             second: Calendar.second, microsecond: Calendar.microsecond}
 
-  @unix_epoch :calendar.datetime_to_gregorian_seconds {{1970, 1, 1}, {0, 0, 0}}
-
   @doc """
   Returns the current naive datetime in UTC.
 
@@ -932,7 +949,7 @@ defmodule NaiveDateTime do
   end
 
   @doc """
-  Subtract `naive_datetime2` from `naive_datetime1`.
+  Subtracts `naive_datetime2` from `naive_datetime1`.
 
   The answer can be returned in any `unit` available from `t:System.time_unit/0`.
 
@@ -1075,14 +1092,14 @@ defmodule NaiveDateTime do
   @spec from_iso8601(String.t) :: {:ok, t} | {:error, atom}
   def from_iso8601(<<year::4-bytes, ?-, month::2-bytes, ?-, day::2-bytes, sep,
                      hour::2-bytes, ?:, min::2-bytes, ?:, sec::2-bytes, rest::binary>>) when sep in [?\s, ?T] do
-    with {year, ""}       <- Integer.parse(year),
-         {month, ""}      <- Integer.parse(month),
-         {day, ""}        <- Integer.parse(day),
-         {hour, ""}       <- Integer.parse(hour),
-         {min, ""}        <- Integer.parse(min),
-         {sec, ""}        <- Integer.parse(sec),
+    with {year, ""} <- Integer.parse(year),
+         {month, ""} <- Integer.parse(month),
+         {day, ""} <- Integer.parse(day),
+         {hour, ""} <- Integer.parse(hour),
+         {min, ""} <- Integer.parse(min),
+         {sec, ""} <- Integer.parse(sec),
          {microsec, rest} <- Calendar.ISO.parse_microsecond(rest),
-         {_offset, ""}    <- Calendar.ISO.parse_offset(rest) do
+         {_offset, ""} <- Calendar.ISO.parse_offset(rest) do
       new(year, month, day, hour, min, sec, microsec)
     else
       _ -> {:error, :invalid_format}
@@ -1600,9 +1617,7 @@ defmodule DateTime do
 
   WARNING: the ISO 8601 datetime format does not contain the time zone nor
   its abbreviation, which means information is lost when converting to such
-  format. This is also why this module does not provide a `from_iso8601/1`
-  function, as it is impossible to build a proper `DateTime` from only the
-  information in the ISO 8601 string.
+  format.
 
   ### Examples
 
@@ -1630,6 +1645,88 @@ defmodule DateTime do
                   time_zone: time_zone, zone_abbr: zone_abbr, utc_offset: utc_offset, std_offset: std_offset}) do
     Calendar.ISO.datetime_to_iso8601(year, month, day, hour, minute, second, microsecond,
                                      time_zone, zone_abbr, utc_offset, std_offset)
+  end
+
+  @doc """
+  Parses the extended "Date and time of day" format described by
+  [ISO 8601:2004](https://en.wikipedia.org/wiki/ISO_8601).
+
+  Since ISO8601 does not include the proper time zone, the given
+  string will be converted to UTC and its offset in seconds will be
+  returned as part of this function. Therefore offset information
+  must be present in the string.
+
+  As specified in the standard, the separator "T" may be omitted if
+  desired as there is no ambiguity within this function.
+
+  Time representations with reduced accuracy are not supported.
+
+  ## Examples
+
+      iex> DateTime.from_iso8601("2015-01-23T23:50:07Z")
+      {:ok, %DateTime{calendar: Calendar.ISO, day: 23, hour: 23, microsecond: {0, 0}, minute: 50, month: 1, second: 7, std_offset: 0,
+                      time_zone: "Etc/UTC", utc_offset: 0, year: 2015, zone_abbr: "UTC"}, 0}
+      iex> DateTime.from_iso8601("2015-01-23T23:50:07.123+02:30")
+      {:ok, %DateTime{calendar: Calendar.ISO, day: 23, hour: 21, microsecond: {123000, 3}, minute: 20, month: 1, second: 7, std_offset: 0,
+                      time_zone: "Etc/UTC", utc_offset: 0, year: 2015, zone_abbr: "UTC"}, 9000}
+
+      iex> DateTime.from_iso8601("2015-01-23P23:50:07")
+      {:error, :invalid_format}
+      iex> DateTime.from_iso8601("2015-01-23 23:50:07A")
+      {:error, :invalid_format}
+      iex> DateTime.from_iso8601("2015-01-23T23:50:07")
+      {:error, :missing_offset}
+      iex> DateTime.from_iso8601("2015-01-23 23:50:61")
+      {:error, :invalid_time}
+      iex> DateTime.from_iso8601("2015-01-32 23:50:07")
+      {:error, :invalid_date}
+
+      iex> DateTime.from_iso8601("2015-01-23T23:50:07.123-00:00")
+      {:error, :invalid_format}
+      iex> DateTime.from_iso8601("2015-01-23T23:50:07.123-00:60")
+      {:error, :invalid_format}
+
+  """
+  @spec from_iso8601(String.t) :: {:ok, t, Calendar.utc_offset} | {:error, atom}
+  def from_iso8601(<<year::4-bytes, ?-, month::2-bytes, ?-, day::2-bytes, sep,
+                     hour::2-bytes, ?:, min::2-bytes, ?:, sec::2-bytes, rest::binary>>) when sep in [?\s, ?T] do
+    with {year, ""} <- Integer.parse(year),
+         {month, ""} <- Integer.parse(month),
+         {day, ""} <- Integer.parse(day),
+         {hour, ""} <- Integer.parse(hour),
+         {min, ""} <- Integer.parse(min),
+         {sec, ""} <- Integer.parse(sec),
+         {microsec, rest} <- Calendar.ISO.parse_microsecond(rest),
+         {:ok, date} <- Calendar.ISO.date(year, month, day),
+         {:ok, time} <- Time.new(hour, min, sec, microsec),
+         {:ok, offset} <- parse_offset(rest) do
+      %{year: year, month: month, day: day} = date
+      %{hour: hour, minute: minute, second: second, microsecond: microsecond} = time
+
+      erl = {{year, month, day}, {hour, minute, second}}
+      seconds = :calendar.datetime_to_gregorian_seconds(erl)
+      {{year, month, day}, {hour, minute, second}} =
+        :calendar.gregorian_seconds_to_datetime(seconds - offset)
+
+      {:ok, %DateTime{year: year, month: month, day: day,
+                      hour: hour, minute: minute, second: second, microsecond: microsecond,
+                      std_offset: 0, utc_offset: 0, zone_abbr: "UTC", time_zone: "Etc/UTC"}, offset}
+    else
+      {:error, reason} -> {:error, reason}
+      _ -> {:error, :invalid_format}
+    end
+  end
+
+  def from_iso8601(_) do
+    {:error, :invalid_format}
+  end
+
+  defp parse_offset(rest) do
+    case Calendar.ISO.parse_offset(rest) do
+      {offset, ""} when is_integer(offset) -> {:ok, offset}
+      {nil, ""} -> {:error, :missing_offset}
+      _ -> {:error, :invalid_format}
+    end
   end
 
   @doc """

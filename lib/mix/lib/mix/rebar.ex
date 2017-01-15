@@ -51,7 +51,7 @@ defmodule Mix.Rebar do
         []
       {:error, error} ->
         reason = :file.format_error(error)
-        Mix.raise "Error consulting rebar config #{inspect config_path}: #{reason}"
+        Mix.raise "Error consulting Rebar config #{inspect config_path}: #{reason}"
     end
 
     if File.exists?(script_path) do
@@ -171,6 +171,20 @@ defmodule Mix.Rebar do
   end
 
   @doc """
+  Updates Rebar configuration to be more suitable for dependencies.
+
+  Drops `warnings_as_errors` from `erl_opts`.
+  """
+  def dependency_config(config) do
+    Enum.map(config, fn
+      {:erl_opts, opts} ->
+        {:erl_opts, Enum.reject(opts, &(&1 == :warnings_as_errors))}
+      other ->
+        other
+    end)
+  end
+
+  @doc """
   Parses the dependencies in given `rebar.config` to Mix's dependency format.
   """
   def deps(app, config, overrides) do
@@ -282,7 +296,7 @@ defmodule Mix.Rebar do
   end
 
   defp eval_binds(binds) do
-    Enum.reduce(binds, :erl_eval.new_bindings, fn ({k, v}, binds) ->
+    Enum.reduce(binds, :erl_eval.new_bindings, fn({k, v}, binds) ->
       :erl_eval.add_binding(k, v, binds)
     end)
   end

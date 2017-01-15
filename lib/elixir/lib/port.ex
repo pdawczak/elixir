@@ -63,7 +63,7 @@ defmodule Port do
 
   On its turn, the port will send the connected process the following messages:
 
-    * `{port, {:port, data}}` - data sent by the port
+    * `{port, {:data, data}}` - data sent by the port
     * `{port, :closed}` - reply to the `{pid, :close}` message
     * `{port, :connected}` - reply to the `{pid, {:connect, new_pid}}` message
     * `{:EXIT, port, reason}` - exit signals in case the port crashes and the
@@ -138,15 +138,14 @@ defmodule Port do
   you can wrap the application in a script that checks for stdin. Here is such
   script in bash:
 
-      #!/bin/bash
-      name=$1
-      shift
-      $name $*
+      #!/bin/sh
+      "$@"
       pid=$!
       while read line ; do
         :
-      done < /dev/stdin
+      done
       kill -KILL $pid
+
 
   Now instead of:
 

@@ -150,6 +150,21 @@ defmodule Logger.TranslatorTest do
     """s
   end
 
+  test "translates Task async_stream crashes with neighbour" do
+    fun = fn -> Task.async_stream([:oops], :erlang, :error, []) |> Enum.to_list() end
+    {:ok, pid} = Task.start(__MODULE__, :task, [self(), fun])
+
+    assert capture_log(:debug, fn ->
+      ref = Process.monitor(pid)
+      send(pid, :go)
+      receive do: ({:DOWN, ^ref, _, _, _} -> :ok)
+    end) =~ ~r"""
+    Neighbours:
+        #{inspect pid}
+            Initial Call: Logger\.TranslatorTest\.task/2
+    """
+  end
+
   test "translates Task undef module crash" do
     assert capture_log(fn ->
       {:ok, pid} = Task.start(:module_does_not_exist, :undef, [])
@@ -191,7 +206,7 @@ defmodule Logger.TranslatorTest do
       receive do: ({:DOWN, ^ref, _, _, _} -> :ok)
     end) =~ ~r"""
     \[error\] Task #PID<\d+\.\d+\.\d+> started from #PID<\d+\.\d+\.\d+> terminating
-    \*\* \(ErlangError\) erlang error: :foo
+    \*\* \(ErlangError\) Erlang error: :foo
     .*
     Function: &:erlang\.error/1
         Args: \[%ErlangError{.*}\]
@@ -244,12 +259,25 @@ defmodule Logger.TranslatorTest do
     """
   end
 
+  test "translates Process crashes" do
+    assert capture_log(:info, fn ->
+      {_, ref} = spawn_monitor(fn() -> raise "oops" end)
+      receive do: ({:DOWN, ^ref, _, _, _} -> :ok)
+      # Even though the monitor has been received the emulator may not have
+      # sent the message to the error logger
+      Process.sleep(200)
+    end) =~ ~r"""
+    \[error\] Process #PID<\d+\.\d+\.\d+>\ raised an exception
+    \*\* \(RuntimeError\) oops
+    """
+  end
+
   test "translates :proc_lib crashes" do
     {:ok, pid} = Task.start_link(__MODULE__, :task, [self()])
 
     assert capture_log(:info, fn ->
       ref = Process.monitor(pid)
-      send(pid, :message)
+
       send(pid, :go)
       receive do: ({:DOWN, ^ref, _, _, _} -> :ok)
     end) =~ ~r"""
@@ -260,19 +288,6 @@ defmodule Logger.TranslatorTest do
     Initial Call: Logger.TranslatorTest.task/1
     Ancestors: \[#PID<\d+\.\d+\.\d+>\]
     """s
-  end
-
-  test "translates Process crashes" do
-    assert capture_log(:info, fn ->
-      {_, ref} = spawn_monitor(fn() -> raise "oops" end)
-      receive do: ({:DOWN, ^ref, _, _, _} -> :ok)
-      # Even though the monitor has been received the emulator may not have
-      # sent the message to the error logger
-      :timer.sleep(200)
-    end) =~ ~r"""
-    \[error\] Process #PID<\d+\.\d+\.\d+>\ raised an exception
-    \*\* \(RuntimeError\) oops
-    """
   end
 
   test "translates :proc_lib crashes with name" do
@@ -648,5 +663,4 @@ defmodule Logger.TranslatorTest do
     :proc_lib.init_ack({:ok, self()})
     receive do: ({:EXIT, _, _} -> exit(:stop))
   end
-
 end

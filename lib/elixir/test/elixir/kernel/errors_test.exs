@@ -39,12 +39,12 @@ defmodule Kernel.ErrorsTest do
   end
 
   test "invalid identifier" do
-    msg = fn char, name -> "nofile:1: invalid character '#{char}' in identifier: #{name}" end
+    msg = fn name -> "nofile:1: invalid character \"@\" (codepoint U+0040) in token: #{name}" end
 
-    assert_compile_fail SyntaxError, msg.(:@, "foo@"), 'foo@'
-    assert_compile_fail SyntaxError, msg.(:@, "foo@"), 'foo@ '
-    assert_compile_fail SyntaxError, msg.(:@, "foo@bar"), 'foo@bar'
-    assert_compile_fail SyntaxError, msg.(:!, "Foo!"), 'Foo!'
+    assert_compile_fail SyntaxError, msg.("foo@"), 'foo@'
+    assert_compile_fail SyntaxError, msg.("foo@"), 'foo@ '
+    assert_compile_fail SyntaxError, msg.("foo@bar"), 'foo@bar'
+    assert_compile_fail SyntaxError, msg.("Foo@"), 'Foo@'
   end
 
   test "invalid fn" do
@@ -203,7 +203,7 @@ defmodule Kernel.ErrorsTest do
 
   test "clause with defaults" do
     assert_compile_fail CompileError,
-      "nofile:3: definitions with multiple clauses and default values require a function head",
+      "nofile:3: definitions with multiple clauses and default values require a header",
       ~C'''
       defmodule Kernel.ErrorsTest.ClauseWithDefaults1 do
         def hello(arg \\ 0), do: nil
@@ -416,7 +416,7 @@ defmodule Kernel.ErrorsTest do
       '(bar -> baz)'
   end
 
-  test "undefined non local function" do
+  test "undefined non-local function" do
     assert_compile_fail CompileError,
       "nofile:1: undefined function call/2",
       'call foo, do: :foo'
@@ -742,6 +742,10 @@ defmodule Kernel.ErrorsTest do
     assert_compile_fail CompileError,
       "nofile:1: invalid argument for alias, expected a compile time atom or alias, got: 1 + 2",
       'alias 1 + 2'
+
+    assert_compile_fail CompileError,
+      "nofile:1: invalid value for keyword :as, expected an alias, got: :\"bar.baz\"",
+      'alias :lists, as: :"bar.baz"'
   end
 
   test "invalid alias expansion" do
@@ -834,7 +838,7 @@ defmodule Kernel.ErrorsTest do
 
   test "new line error" do
     assert_compile_fail SyntaxError,
-      "nofile:3: syntax error before: eol",
+      "nofile:3: unexpectedly reached end of line. The current expression is invalid or incomplete",
       'if true do\n  foo = [],\n  baz\nend'
   end
 
@@ -850,6 +854,14 @@ defmodule Kernel.ErrorsTest do
     assert_compile_fail SyntaxError,
       "nofile:1: syntax error before: ?す"
       ':ok ?す'
+  end
+
+  test "good error message on \"fn do expr end\"" do
+    assert_compile_fail SyntaxError,
+      "nofile:1: unexpected token \"do\". Anonymous functions are written as:\n\n" <>
+        "    fn pattern -> expression end\n\n" <>
+        "Syntax error before: do",
+      'fn do :ok end'
   end
 
   test "invalid var or function on guard" do
@@ -879,7 +891,7 @@ defmodule Kernel.ErrorsTest do
 
   test "invalid args for bodyless clause" do
     assert_compile_fail CompileError,
-      "nofile:2: can use only variables and \\\\ as arguments in function heads",
+      "nofile:2: can use only variables and \\\\ as arguments in definition header",
       '''
       defmodule Kernel.ErrorsTest.InvalidArgsForBodylessClause do
         def foo(arg // nil)

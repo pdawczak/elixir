@@ -20,8 +20,9 @@ defmodule Kernel do
   cannot be skipped. These are described in `Kernel.SpecialForms`.
 
   Some of the functions described in this module are inlined by
-  the Elixir compiler into their Erlang counterparts in the `:erlang`
-  module. Those functions are called BIFs (built-in internal functions)
+  the Elixir compiler into their Erlang counterparts in the
+  [`:erlang` module](http://www.erlang.org/doc/man/erlang.html).
+  Those functions are called BIFs (built-in internal functions)
   in Erlang-land and they exhibit interesting properties, as some of
   them are allowed in guards and others are used for compiler
   optimizations.
@@ -655,8 +656,12 @@ defmodule Kernel do
   @doc """
   Spawns the given function and returns its PID.
 
-  Check the `Process` and `Node` modules for other functions
-  to handle processes, including spawning functions in nodes.
+  Typically developers do not use the `spawn` functions, instead they use
+  abstractions such as `Task`, `GenServer` and `Agent`, built on top of
+  `spawn`, that spawns processes with more conveniences in terms of
+  introspection and debugging.
+
+  Check the `Process` module for more process related functions,
 
   The anonymous function receives 0 arguments, and may return any value.
 
@@ -681,8 +686,12 @@ defmodule Kernel do
   Spawns the given module and function passing the given args
   and returns its PID.
 
-  Check the `Process` and `Node` modules for other functions
-  to handle processes, including spawning functions in nodes.
+  Typically developers do not use the `spawn` functions, instead they use
+  abstractions such as `Task`, `GenServer` and `Agent`, built on top of
+  `spawn`, that spawns processes with more conveniences in terms of
+  introspection and debugging.
+
+  Check the `Process` module for more process related functions,
 
   Inlined by the compiler.
 
@@ -699,8 +708,12 @@ defmodule Kernel do
   @doc """
   Spawns the given function, links it to the current process and returns its PID.
 
-  Check the `Process` and `Node` modules for other functions
-  to handle processes, including spawning functions in nodes.
+  Typically developers do not use the `spawn` functions, instead they use
+  abstractions such as `Task`, `GenServer` and `Agent`, built on top of
+  `spawn`, that spawns processes with more conveniences in terms of
+  introspection and debugging.
+
+  Check the `Process` module for more process related functions,
 
   The anonymous function receives 0 arguments, and may return any value.
 
@@ -725,8 +738,12 @@ defmodule Kernel do
   Spawns the given module and function passing the given args,
   links it to the current process and returns its PID.
 
-  Check the `Process` and `Node` modules for other functions
-  to handle processes, including spawning functions in nodes.
+  Typically developers do not use the `spawn` functions, instead they use
+  abstractions such as `Task`, `GenServer` and `Agent`, built on top of
+  `spawn`, that spawns processes with more conveniences in terms of
+  introspection and debugging.
+
+  Check the `Process` module for more process related functions,
 
   Inlined by the compiler.
 
@@ -744,8 +761,12 @@ defmodule Kernel do
   Spawns the given function, monitors it and returns its PID
   and monitoring reference.
 
-  Check the `Process` and `Node` modules for other functions
-  to handle processes, including spawning functions in nodes.
+  Typically developers do not use the `spawn` functions, instead they use
+  abstractions such as `Task`, `GenServer` and `Agent`, built on top of
+  `spawn`, that spawns processes with more conveniences in terms of
+  introspection and debugging.
+
+  Check the `Process` module for more process related functions,
 
   The anonymous function receives 0 arguments, and may return any value.
 
@@ -766,8 +787,12 @@ defmodule Kernel do
   Spawns the given module and function passing the given args,
   monitors it and returns its PID and monitoring reference.
 
-  Check the `Process` and `Node` modules for other functions
-  to handle processes, including spawning functions in nodes.
+  Typically developers do not use the `spawn` functions, instead they use
+  abstractions such as `Task`, `GenServer` and `Agent`, built on top of
+  `spawn`, that spawns processes with more conveniences in terms of
+  introspection and debugging.
+
+  Check the `Process` module for more process related functions,
 
   Inlined by the compiler.
 
@@ -2373,63 +2398,69 @@ defmodule Kernel do
   """
   defmacro @(expr)
 
-  defmacro @({name, _, args}) do
-    # Check for Module as it is compiled later than Kernel
-    case bootstrapped?(Module) do
-      false -> nil
-      true  ->
-        assert_module_scope(__CALLER__, :@, 1)
-        function? = __CALLER__.function != nil
+  defmacro @({name, meta, args}) do
+    assert_module_scope(__CALLER__, :@, 1)
+    function? = __CALLER__.function != nil
 
-        case not function? and __CALLER__.context == :match do
+    cond do
+      # Check for Module as it is compiled later than Kernel
+      not bootstrapped?(Module) ->
+        nil
+
+      not function? and __CALLER__.context == :match ->
+        raise ArgumentError, "invalid write attribute syntax, you probably meant to use: @#{name} expression"
+
+      # Typespecs attributes are currently special cased by the compiler
+      macro = is_list(args) and length(args) == 1 and typespec(name) ->
+        case bootstrapped?(Kernel.Typespec) do
           false -> nil
-          true  ->
-            raise ArgumentError, "invalid write attribute syntax, you probably meant to use: @#{name} expression"
+          true  -> quote do: Kernel.Typespec.unquote(macro)(unquote(hd(args)))
         end
 
-        # Typespecs attributes are special cased by the compiler so far
-        case is_list(args) and length(args) == 1 and typespec(name) do
-          false ->
-            do_at(args, name, function?, __CALLER__)
-          macro ->
-            case bootstrapped?(Kernel.Typespec) do
-              false -> nil
-              true  -> quote do: Kernel.Typespec.unquote(macro)(unquote(hd(args)))
-            end
-        end
+      true ->
+        do_at(args, meta, name, function?, __CALLER__)
     end
   end
 
   # @attribute(value)
-  defp do_at([arg], name, function?, env) do
-    case function? do
-      true ->
+  defp do_at([arg], meta, name, function?, env) do
+    line =
+      case :lists.keymember(:context, 1, meta) do
+        true -> nil
+        false -> env.line
+      end
+
+    cond do
+      function? ->
         raise ArgumentError, "cannot set attribute @#{name} inside function/macro"
-      false ->
-        cond do
-          name == :behavior ->
-            :elixir_errors.warn env.line, env.file,
-                                "@behavior attribute is not supported, please use @behaviour instead"
-          :lists.member(name, [:moduledoc, :typedoc, :doc]) ->
-            {stack, _} = :elixir_quote.escape(env_stacktrace(env), false)
-            arg = {env.line, arg}
-            quote do: Module.put_attribute(__MODULE__, unquote(name), unquote(arg), unquote(stack))
-          true ->
-            quote do: Module.put_attribute(__MODULE__, unquote(name), unquote(arg))
-        end
+
+      name == :behavior ->
+        :elixir_errors.warn env.line, env.file,
+                            "@behavior attribute is not supported, please use @behaviour instead"
+
+      :lists.member(name, [:moduledoc, :typedoc, :doc]) ->
+        {stack, _} = :elixir_quote.escape(env_stacktrace(env), false)
+        arg = {env.line, arg}
+        quote do: Module.put_attribute(__MODULE__, unquote(name), unquote(arg),
+                                       unquote(stack), unquote(line))
+
+      true ->
+        quote do: Module.put_attribute(__MODULE__, unquote(name), unquote(arg),
+                                       nil, unquote(line))
     end
   end
 
   # @attribute or @attribute()
-  defp do_at(args, name, function?, env) when is_atom(args) or args == [] do
+  defp do_at(args, _meta, name, function?, env) when is_atom(args) or args == [] do
     stack = env_stacktrace(env)
-
     doc_attr? = :lists.member(name, [:moduledoc, :typedoc, :doc])
+
     case function? do
       true ->
         value =
-          with {_, doc} when doc_attr? <- Module.get_attribute(env.module, name, stack),
-            do: doc
+          with {_, doc} when doc_attr? <-
+                 Module.get_attribute(env.module, name, stack),
+               do: doc
         try do
           :elixir_quote.escape(value, false)
         rescue
@@ -2438,17 +2469,19 @@ defmodule Kernel do
         else
           {val, _} -> val
         end
+
       false ->
         {escaped, _} = :elixir_quote.escape(stack, false)
         quote do
-          with {_, doc} when unquote(doc_attr?) <- Module.get_attribute(__MODULE__, unquote(name), unquote(escaped)),
-            do: doc
+          with {_, doc} when unquote(doc_attr?) <-
+                 Module.get_attribute(__MODULE__, unquote(name), unquote(escaped)),
+               do: doc
         end
     end
   end
 
   # All other cases
-  defp do_at(args, name, _function?, _env) do
+  defp do_at(args, _meta, name, _function?, _env) do
     raise ArgumentError, "expected 0 or 1 argument for @#{name}, got: #{length(args)}"
   end
 
@@ -2646,9 +2679,12 @@ defmodule Kernel do
   end
 
   @doc """
-  Returns a range with the specified start and end.
+  Returns a range with the specified `first` and `last` integers.
 
-  Both ends are included.
+  If last is larger than first, the range will be increasing from
+  first to last. If first is larger than last, the range will be
+  decreasing from first to last. If first is equal to last, the range
+  will contain one element, which is the number itself.
 
   ## Examples
 
@@ -2912,11 +2948,18 @@ defmodule Kernel do
 
       Enum.member?([1, 2, 3], x)
 
+  Elixir also supports `left not in right`, which evaluates to
+  `not(left in right)`:
+
+      iex> x = 1
+      iex> x not in [1, 2, 3]
+      false
+
   ## Guards
 
-  The `in/2` operator can be used in guard clauses as long as the
-  right-hand side is a range or a list. In such cases, Elixir will expand the
-  operator to a valid guard expression. For example:
+  The `in/2` operator (as well as `not in`) can be used in guard clauses as
+  long as the right-hand side is a range or a list. In such cases, Elixir will
+  expand the operator to a valid guard expression. For example:
 
       when x in [1, 2, 3]
 
@@ -2932,6 +2975,16 @@ defmodule Kernel do
 
       when x >= 1 and x <= 3
 
+  ### AST considerations
+
+  `left not in right` is parsed by the compiler into the AST:
+
+      {:not, _, [{:in, _, [left, right]}]}
+
+  This is the same AST as `not(left in right)`.
+
+  Additionally, `Macro.to_string/2` will translate all occurrences of
+  this AST to `left not in right`.
   """
   defmacro left in right do
     in_module? = (__CALLER__.context == nil)
@@ -3240,7 +3293,7 @@ defmodule Kernel do
 
     under = String.to_atom(<<"_@", :erlang.integer_to_binary(counter)::binary>>)
     args  = [key, kind, under, var]
-    [{:{}, [], args} | module_vars(vars, counter+1)]
+    [{:{}, [], args} | module_vars(vars, counter + 1)]
   end
 
   defp module_vars([], _counter) do
@@ -3571,6 +3624,7 @@ defmodule Kernel do
           end
         false ->
           quote do
+            _ = @enforce_keys
             def __struct__(kv) do
               :lists.foldl(fn {key, val}, acc ->
                 :maps.update(key, val, acc)
@@ -3699,7 +3753,7 @@ defmodule Kernel do
     end
   end
 
-  @doc """
+  @doc ~S"""
   Defines a protocol.
 
   A protocol specifies an API that should be defined by its
@@ -3707,43 +3761,46 @@ defmodule Kernel do
 
   ## Examples
 
-  In Elixir, only `false` and `nil` are considered falsy values.
-  Everything else evaluates to `true` in `if/2` clauses. Depending
-  on the application, it may be important to specify a `blank?`
-  protocol that returns a boolean for other data types that should
-  be considered "blank". For instance, an empty list or an empty
-  binary could be considered blank.
+  In Elixir, we have two verbs for checking how many items there
+  are in a data structure: `length` and `size`.  `length` means the
+  information must be computed. For example, `length(list)` needs to
+  traverse the whole list to calculate its length. On the other hand,
+  `tuple_size(tuple)` and `byte_size(binary)` do not depend on the
+  tuple and binary size as the size information is precomputed in
+  the data structure.
 
-  Such protocol could be implemented as follows:
+  Although Elixir includes specific functions such as `tuple_size`,
+  `binary_size` and `map_size`, sometimes we want to be able to
+  retrieve the size of a data structure regardless of its type.
+  In Elixir we can write polymorphic code, i.e. code that works
+  with different shapes/types, by using protocols. A size protocol
+  could be implemented as follows:
 
-      defprotocol Blank do
-        @doc "Returns `true` if `data` is considered blank/empty"
-        def blank?(data)
+      defprotocol Size do
+        @doc "Calculates the size (and not the length!) of a data structure"
+        def size(data)
       end
 
-  Now that the protocol is defined it can be implemented. It needs to be
-  implemented for each Elixir type; for example:
+  Now that the protocol can be implemented for every data structure
+  the protocol may have a compliant implementation for:
 
-      # Integers are never blank
-      defimpl Blank, for: Integer do
-        def blank?(number), do: false
+      defimpl Size, for: Binary do
+        def size(binary), do: byte_size(binary)
       end
 
-      # The only blank list is the empty one
-      defimpl Blank, for: List do
-        def blank?([]), do: true
-        def blank?(_),  do: false
+      defimpl Size, for: Map do
+        def size(map), do: map_size(map)
       end
 
-      # The only blank atoms are "false" and "nil"
-      defimpl Blank, for: Atom do
-        def blank?(false), do: true
-        def blank?(nil),   do: true
-        def blank?(_),     do: false
+      defimpl Size, for: Tuple do
+        def size(tuple), do: tuple_size(tuple)
       end
 
-  The implementation of the `Blank` protocol would need to be defined for all
-  Elixir types. The available types are:
+  Notice we didn't implement it for lists as we don't have the
+  `size` information on lists, rather its value needs to be
+  computed with `length`.
+
+  It is possible to implement protocols for all Elixir types:
 
     * Structs (see below)
     * `Tuple`
@@ -3763,11 +3820,11 @@ defmodule Kernel do
 
   The real benefit of protocols comes when mixed with structs.
   For instance, Elixir ships with many data types implemented as
-  structs, like `MapSet`. We can implement the `Blank` protocol
+  structs, like `MapSet`. We can implement the `Size` protocol
   for those types as well:
 
-      defimpl Blank, for: MapSet do
-        def blank?(enum_like), do: Enum.empty?(enum_like)
+      defimpl Size, for: MapSet do
+        def size(map_set), do: MapSet.size(map_set)
       end
 
   When implementing a protocol for a struct, the `:for` option can
@@ -3777,54 +3834,54 @@ defmodule Kernel do
       defmodule User do
         defstruct [:email, :name]
 
-        defimpl Blank do
-          def blank?(%User{}), do: false
+        defimpl Size do
+          def size(%User{}), do: 2 # two fields
         end
       end
 
-  If a protocol is not found for a given type, it will fallback to
-  `Any`. Protocols that are implemented for maps don't work by default
-  on structs; look at `defstruct/1` for more information about deriving
+  If a protocol implementation is not found for a given type,
+  invoking the protocol will raise unless it is configured to
+  fallback to `Any`. Conveniences for building implementations
+  on top of existing ones are also available, look at `defstruct/1`
+  for more information about deriving
   protocols.
 
   ## Fallback to any
 
   In some cases, it may be convenient to provide a default
-  implementation for all types. This can be achieved by
-  setting the `@fallback_to_any` attribute to `true` in the protocol
+  implementation for all types. This can be achieved by setting
+  the `@fallback_to_any` attribute to `true` in the protocol
   definition:
 
-      defprotocol Blank do
+      defprotocol Size do
         @fallback_to_any true
-        def blank?(data)
+        def size(data)
       end
 
-  The `Blank` protocol can now be implemented for `Any`:
+  The `Size` protocol can now be implemented for `Any`:
 
-      defimpl Blank, for: Any do
-        def blank?(_), do: true
+      defimpl Size, for: Any do
+        def size(_), do: 0
       end
 
-  One may wonder why such behaviour (fallback to any) is not the default one.
-
-  It is two-fold: first, the majority of protocols cannot
-  implement an action in a generic way for all types; in fact,
-  providing a default implementation may be harmful, because users
-  may rely on the default implementation instead of providing a
-  specialized one.
-
-  Second, falling back to `Any` adds an extra lookup to all types,
-  which is unnecessary overhead unless an implementation for `Any` is
-  required.
+  Although the implementation above is arguably not a reasonable
+  one. For example, it makes no sense to say a PID or an Integer
+  have a size of 0. That's one of the reasons why `@fallback_to_any`
+  is an opt-in behaviour. For the majority of protocols, raising
+  an error when a protocol is not implemented is the proper behaviour.
 
   ## Types
 
   Defining a protocol automatically defines a type named `t`, which
   can be used as follows:
 
-      @spec present?(Blank.t) :: boolean
-      def present?(blank) do
-        not Blank.blank?(blank)
+      @spec print_size(Size.t) :: :ok
+      def print_size(data) do
+        IO.puts(case Size.size(data) do
+          0 -> "data has no items"
+          1 -> "data has one item"
+          n -> "data has #{n} items"
+        end)
       end
 
   The `@spec` above expresses that all types allowed to implement the
@@ -3863,12 +3920,12 @@ defmodule Kernel do
   all implementations are known up-front, Elixir provides a feature
   called protocol consolidation. For this reason, all protocols are
   compiled with `debug_info` set to `true`, regardless of the option
-  set by `elixirc` compiler. The debug info though may be removed
-  after consolidation.
+  set by `elixirc` compiler. The debug info though may be removed after
+  consolidation.
 
-  For more information on how to apply protocol consolidation to
-  a given project, please check the functions in the `Protocol`
-  module or the `mix compile.protocols` task.
+  Protocol consolidation is applied by default to all Mix projects.
+  For applying consolidation manually, please check the functions in
+  the `Protocol` module or the `mix compile.protocols` task.
   """
   defmacro defprotocol(name, do_block)
 
@@ -4440,8 +4497,9 @@ defmodule Kernel do
     end
   end
 
-  # TODO: Deprecate by v1.5
   @doc false
+  # TODO: Remove by 2.0
+  # (hard-deprecated in elixir_dispatch)
   defmacro to_char_list(arg) do
     quote do: Kernel.to_charlist(unquote(arg))
   end

@@ -212,11 +212,9 @@ defmodule MacroTest do
     assert Macro.expand_once(expr, __ENV__) == expr
   end
 
-  @foo 1
-
   test "expand once does not expand module attributes" do
     message = "could not call get_attribute on module #{inspect(__MODULE__)} " <>
-      "because it was already compiled"
+              "because it was already compiled"
     assert_raise ArgumentError, message, fn ->
       Macro.expand_once(quote(do: @foo), __ENV__)
     end
@@ -313,6 +311,10 @@ defmodule MacroTest do
       3
     )
     """
+  end
+
+  test "not in to string" do
+    assert Macro.to_string(quote do: (false not in [])) == "false not in []"
   end
 
   test "if else to string" do

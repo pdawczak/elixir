@@ -3,12 +3,7 @@ Code.require_file "test_helper.exs", __DIR__
 defmodule TaskTest do
   use ExUnit.Case
   doctest Task
-
-  setup do
-    Logger.remove_backend(:console)
-    on_exit fn -> Logger.add_backend(:console, flush: true) end
-    :ok
-  end
+  @moduletag :capture_log
 
   def wait_and_send(caller, atom) do
     send caller, :ready
@@ -370,7 +365,7 @@ defmodule TaskTest do
       task = Task.async(fn() ->
         Process.flag(:trap_exit, true)
         wait_and_send(caller, :ready)
-        :timer.sleep(:infinity)
+        Process.sleep(:infinity)
       end)
 
       receive do: (:ready -> :ok)
@@ -447,7 +442,7 @@ defmodule TaskTest do
       task = Task.async(fn() ->
         Process.flag(:trap_exit, true)
         wait_and_send(caller, :ready)
-        :timer.sleep(:infinity)
+        Process.sleep(:infinity)
       end)
 
       receive do: (:ready -> :ok)
@@ -497,6 +492,7 @@ defmodule TaskTest do
         Process.flag(:trap_exit, true)
         assert 1..4 |> Task.async_stream(&exit/1, @opts) |> Enum.to_list ==
                [exit: 1, exit: 2, exit: 3, exit: 4]
+        refute_received {:EXIT, _, _}
       end
 
       test "shuts down unused tasks" do
